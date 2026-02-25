@@ -95,7 +95,7 @@ const KitchenDisplay = () => {
         };
 
         socket.on('nuevo_pedido', handleNuevoPedido);
-        socket.on('repartidores_online', (reps) => {
+        socket.on('repartidores_online', (reps: any[]) => {
             console.log("🚛 [Cocina] Repartidores online:", reps);
             setRepartidoresOnline(reps);
         });
