@@ -36,11 +36,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
                 "fixed inset-y-0 left-0 z-[100] w-72 bg-slate-950 text-white p-8 transition-transform duration-300 transform md:translate-x-0 md:static",
                 isSidebarOpen ? "translate-x-0" : "-translate-x-full"
             )}>
-                <div className="flex items-center gap-3 mb-12">
-                    <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center rotate-12 shadow-lg shadow-red-600/20">
-                        <Flame className="text-white fill-white" size={24} />
-                    </div>
-                    <h2 className="text-2xl font-black italic tracking-tighter">PIZZA <span className="text-red-600">ADMIN</span></h2>
+                <div className="flex flex-col items-center mb-12">
+                    <img src="/img/capriccio-logo.png" alt="Logo" className="w-40 h-auto drop-shadow-xl mb-4" />
+                    <span className="text-capriccio-gold text-xs font-black tracking-[0.3em] uppercase border-y border-capriccio-gold/20 py-1">Panel Admin</span>
                 </div>
 
                 <nav className="space-y-3">
@@ -54,13 +52,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
                             className={cn(
                                 "flex items-center gap-4 w-full p-4 rounded-2xl font-bold transition-all group",
                                 activeTab === item.id
-                                    ? "bg-red-600 text-white shadow-lg shadow-red-600/20"
+                                    ? "bg-capriccio-gold text-capriccio-dark shadow-lg shadow-capriccio-gold/20"
                                     : "text-slate-500 hover:bg-white/5 hover:text-slate-300"
                             )}
                         >
                             <item.icon size={20} className={cn(
                                 "transition-transform group-hover:scale-110",
-                                activeTab === item.id ? "text-white" : "text-slate-600"
+                                activeTab === item.id ? "text-capriccio-dark" : "text-slate-600"
                             )} />
                             <span className="uppercase tracking-widest text-xs">{item.label}</span>
                         </button>
@@ -71,8 +69,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
                     <div className="p-5 bg-white/5 rounded-3xl border border-white/5">
                         <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-2">Usuario</p>
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center text-black font-black text-xs italic">JC</div>
-                            <p className="font-bold text-sm text-slate-300">Julio Cerebro</p>
+                            <div className="w-8 h-8 bg-capriccio-gold rounded-lg flex items-center justify-center text-capriccio-dark font-black text-xs italic">C</div>
+                            <p className="font-bold text-sm text-slate-300">Admin Capriccio</p>
                         </div>
                     </div>
                 </div>

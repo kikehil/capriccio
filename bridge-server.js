@@ -17,122 +17,142 @@ const io = new Server(server, {
     }
 });
 
-// "Base de Datos" Local (Persistencia simple en JSON)
+// "Base de Datos" Local
 const DB_PATH = path.join(__dirname, 'pedidos.json');
+const PROMOS_PATH = path.join(__dirname, 'promos.json');
 let pedidos = [];
+let promos = [];
+let repartidoresOnline = {}; // { socketId: { nombre, id } }
 
 // Cargar datos al iniciar
-if (fs.existsSync(DB_PATH)) {
-    try {
-        const data = fs.readFileSync(DB_PATH, 'utf8');
-        pedidos = JSON.parse(data);
-    } catch (e) {
-        pedidos = [];
+const loadDB = () => {
+    if (fs.existsSync(DB_PATH)) {
+        try {
+            pedidos = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+        } catch (e) { pedidos = []; }
     }
-}
+    if (fs.existsSync(PROMOS_PATH)) {
+        try {
+            promos = JSON.parse(fs.readFileSync(PROMOS_PATH, 'utf8'));
+        } catch (e) { promos = []; }
+    }
+};
+
+loadDB();
 
 const saveDB = () => {
     fs.writeFileSync(DB_PATH, JSON.stringify(pedidos, null, 2));
 };
 
+const savePromos = () => {
+    fs.writeFileSync(PROMOS_PATH, JSON.stringify(promos, null, 2));
+    io.emit('promos_actualizadas', promos);
+};
+
 // --- ENDPOINTS API ---
 
-// 1. Crear Pedido (Sustituye a n8n)
 app.post('/api/pedidos', (req, res) => {
-    const nuevoPedido = {
-        ...req.body,
-        status: 'recibido', // recibido -> preparando -> listo -> entregado
-        createdAt: req.body.createdAt || new Date().toISOString()
-    };
-
-    console.log(`📦 Nuevo Pedido Recibido: ${nuevoPedido.id}`);
-
-    pedidos.push(nuevoPedido);
-    saveDB();
-
-    // Notificar a Cocina y Admin inmediatamente
-    io.emit('nuevo_pedido', nuevoPedido);
-
-    res.status(201).json({ success: true, data: nuevoPedido });
-});
-
-// 2. Obtener Pedidos (Para que el Admin pueda ver el historial al cargar)
-app.get('/api/pedidos', (req, res) => {
-    res.json(pedidos);
-});
-
-// 3. Actualizar Estatus (Lógica de Negocio centralizada)
-app.patch('/api/pedidos/:id/status', (req, res) => {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const index = pedidos.findIndex(p => p.id === id);
-    if (index !== -1) {
-        pedidos[index].status = status;
-        saveDB();
-
-        console.log(`🔄 Pedido ${id} actualizado a: ${status}`);
-
-        // Emitir el cambio según el flujo
-        if (status === 'listo') {
-            // De Cocina -> Repartidor
-            io.emit('pedido_listo_reparto', pedidos[index]);
-        } else if (status === 'entregado') {
-            // De Repartidor -> Todos
-            io.emit('pedido_entregado_remoto', id);
-        }
-
-        // Notificar al Admin del cambio de estado general
-        io.emit('actualizacion_status_global', { id, status });
-
-        return res.json({ success: true, pedido: pedidos[index] });
-    }
-
-    res.status(404).json({ error: "Pedido no encontrado" });
-});
-
-// 4. Endpoint de compatibilidad (para no romper el frontend mientras se actualiza)
-app.post('/webhook-n8n', (req, res) => {
-    console.log("⚠️ Webhook-n8n llamado (redireccionando a API interna)");
     const nuevoPedido = {
         ...req.body,
         status: 'recibido',
         createdAt: req.body.createdAt || new Date().toISOString()
     };
+    console.log(`📦 Nuevo Pedido Recibido: ${nuevoPedido.id}`);
     pedidos.push(nuevoPedido);
     saveDB();
     io.emit('nuevo_pedido', nuevoPedido);
-    res.status(200).send({ status: 'success', data: nuevoPedido });
+    res.status(201).json({ success: true, data: nuevoPedido });
+});
+
+app.get('/api/pedidos', (req, res) => {
+    res.json(pedidos);
+});
+
+app.get('/api/admin/stats', (req, res) => {
+    const hoy = new Date().toISOString().split('T')[0];
+    const pedidosHoy = pedidos.filter(p => {
+        const pFecha = p.createdAt ? p.createdAt.split('T')[0] : '';
+        return pFecha === hoy;
+    });
+    const revenueToday = pedidosHoy.reduce((acc, curr) => acc + (curr.total || 0), 0);
+    const recentOrders = [...pedidos].reverse().slice(0, 10);
+    res.json({
+        revenueToday,
+        orderCount: pedidosHoy.length,
+        recentOrders,
+        totalOrders: pedidos.length
+    });
+});
+
+app.patch('/api/pedidos/:id/status', (req, res) => {
+    const { id } = req.params;
+    const { status, repartidor } = req.body;
+    const index = pedidos.findIndex(p => p.id === id);
+
+    if (index !== -1) {
+        pedidos[index].status = status;
+        if (repartidor) pedidos[index].repartidor = repartidor;
+        if (status === 'entregado') pedidos[index].deliveredAt = new Date().toISOString();
+
+        saveDB();
+        console.log(`🔄 Pedido ${id} -> ${status} ${repartidor ? `(Asignado a: ${repartidor})` : ''}`);
+
+        if (status === 'listo') {
+            io.emit('pedido_listo_reparto', pedidos[index]);
+        } else if (status === 'entregado') {
+            io.emit('pedido_entregado_remoto', id);
+        }
+        io.emit('actualizacion_status_global', { id, status, repartidor });
+        return res.json({ success: true, pedido: pedidos[index] });
+    }
+    res.status(404).json({ error: "Pedido no encontrado" });
+});
+
+app.get('/api/promos', (req, res) => res.json(promos));
+app.post('/api/promos', (req, res) => {
+    const nuevaPromo = { ...req.body, id: Date.now() };
+    promos.push(nuevaPromo);
+    savePromos();
+    res.status(201).json(nuevaPromo);
+});
+app.put('/api/promos/:id', (req, res) => {
+    const { id } = req.params;
+    const index = promos.findIndex(p => p.id == id);
+    if (index !== -1) {
+        promos[index] = { ...promos[index], ...req.body, id: Number(id) };
+        savePromos();
+        return res.json(promos[index]);
+    }
+    res.status(404).json({ error: "Promo no encontrada" });
+});
+app.delete('/api/promos/:id', (req, res) => {
+    promos = promos.filter(p => p.id != req.params.id);
+    savePromos();
+    res.json({ success: true });
 });
 
 // --- WEBSOCKETS ---
 io.on('connection', (socket) => {
-    console.log('--- Dispositivo conectado:', socket.id);
+    console.log('--- Conectado:', socket.id);
 
-    // Sincronización de Menú
+    socket.on('registro_repartidor', (nombre) => {
+        repartidoresOnline[socket.id] = { nombre, socketId: socket.id };
+        console.log(`🚛 Repartidor registrado: ${nombre}`);
+        io.emit('repartidores_online', Object.values(repartidoresOnline));
+    });
+
     socket.on('actualizar_menu', (updatedMenu) => {
-        console.log('>>> Menú actualizado recibido del Admin.');
         io.emit('menu_actualizado', updatedMenu);
     });
 
-    // Eventos de legado para mantener compatibilidad
-    socket.on('pedido_listo_reparto', (pedido) => {
-        console.log('>>> Cocina marcó pedido listo:', pedido.id);
-        io.emit('pedido_listo_reparto', pedido);
-    });
-
-    socket.on('confirmar_entrega', (id) => {
-        console.log('>>> Repartidor confirmó entrega:', id);
-        io.emit('pedido_entregado_remoto', id);
-    });
-
     socket.on('disconnect', () => {
-        console.log('--- Dispositivo desconectado:', socket.id);
+        delete repartidoresOnline[socket.id];
+        io.emit('repartidores_online', Object.values(repartidoresOnline));
+        console.log('--- Desconectado:', socket.id);
     });
 });
 
 const PORT = 3001;
 server.listen(PORT, () => {
-    console.log(`🚀 SERVIDOR ALL-IN-ONE OPERATIVO en http://localhost:${PORT}`);
-    console.log(`📁 Base de datos local: pedidos.json`);
+    console.log(`🚀 SERVIDOR CAPRICCIO en http://localhost:${PORT}`);
 });

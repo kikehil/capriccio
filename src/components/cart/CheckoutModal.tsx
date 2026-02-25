@@ -102,7 +102,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                         <div className="p-8">
                             <div className="flex justify-between items-center mb-8">
                                 <div>
-                                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900 leading-none mb-2">Finalizar Pedido</h2>
+                                    <h2 className="text-3xl font-title font-black italic uppercase tracking-tighter text-slate-900 leading-none mb-2">Finalizar Pedido</h2>
                                     <p className="text-slate-400 font-bold italic text-sm">Tu pizza está a solo un paso.</p>
                                 </div>
                                 <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
@@ -119,7 +119,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                             required
                                             type="text"
                                             placeholder="Nombre completo"
-                                            className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-red-600/10 focus:bg-white rounded-2xl outline-none font-bold transition-all text-slate-900"
+                                            className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-capriccio-gold/20 focus:bg-white rounded-2xl outline-none font-bold transition-all text-slate-900"
                                             value={userData.nombre}
                                             onChange={(e) => setUserData({ ...userData, nombre: e.target.value })}
                                         />
@@ -143,7 +143,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Total</label>
-                                        <div className="w-full px-6 py-4 bg-slate-950 text-yellow-400 rounded-2xl font-black text-xl italic flex items-center justify-between">
+                                        <div className="w-full px-6 py-4 bg-capriccio-dark text-capriccio-gold rounded-2xl font-black text-xl italic flex items-center justify-between">
                                             <span>$</span>
                                             <span>{total}</span>
                                         </div>
@@ -153,12 +153,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Dirección de Entrega</label>
                                     <div className="relative group">
-                                        <MapPin className="absolute left-4 top-4 text-slate-400 group-focus-within:text-red-600 transition-colors" size={18} />
+                                        <MapPin className="absolute left-4 top-4 text-slate-400 group-focus-within:text-capriccio-gold transition-colors" size={18} />
                                         <textarea
                                             required
                                             placeholder="Calle, número, colonia..."
                                             rows={2}
-                                            className="w-full pl-12 pr-14 py-4 bg-slate-50 border-2 border-transparent focus:border-red-600/10 focus:bg-white rounded-2xl outline-none font-bold transition-all text-slate-900 resize-none"
+                                            className="w-full pl-12 pr-14 py-4 bg-slate-50 border-2 border-transparent focus:border-capriccio-gold/20 focus:bg-white rounded-2xl outline-none font-bold transition-all text-slate-900 resize-none"
                                             value={userData.direccion}
                                             onChange={(e) => setUserData({ ...userData, direccion: e.target.value })}
                                         />
@@ -166,13 +166,13 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                             type="button"
                                             onClick={handleLocate}
                                             disabled={isLocating}
-                                            className="absolute right-3 top-3 p-3 bg-slate-900 hover:bg-black text-white rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
+                                            className="absolute right-3 top-3 p-3 bg-capriccio-dark hover:bg-slate-900 text-white rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
                                             title="Usar mi ubicación actual"
                                         >
                                             {isLocating ? (
-                                                <Loader2 size={18} className="animate-spin text-yellow-400" />
+                                                <Loader2 size={18} className="animate-spin text-capriccio-gold" />
                                             ) : (
-                                                <LocateFixed size={18} className="text-yellow-400" />
+                                                <LocateFixed size={18} className="text-capriccio-gold" />
                                             )}
                                         </button>
                                     </div>
@@ -204,7 +204,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
 
                                 <button
                                     type="submit"
-                                    className="w-full bg-red-600 hover:bg-red-700 text-white py-6 rounded-[2rem] font-black text-xl italic uppercase tracking-widest shadow-xl shadow-red-600/20 active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 group"
+                                    className="w-full bg-capriccio-gold hover:bg-capriccio-gold/90 text-capriccio-dark py-6 rounded-[2rem] font-black text-xl italic uppercase tracking-widest shadow-xl shadow-capriccio-gold/20 active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 group"
                                 >
                                     ¡PEDIR AHORA!
                                     <ArrowRight className="group-hover:translate-x-2 transition-transform" strokeWidth={3} />

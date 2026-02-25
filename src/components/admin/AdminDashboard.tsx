@@ -8,6 +8,7 @@ import io from 'socket.io-client';
 
 import AdminLayout from './AdminLayout';
 import ProductManager from './ProductManager';
+import PromotionManager from './PromotionManager';
 import ReportsModule from './ReportsModule';
 import Login from './Login';
 import { pizzas as initialPizzas, Pizza } from '@/data/menu';
@@ -36,20 +37,20 @@ const AdminDashboard = () => {
 
         // Cargar estadísticas reales al entrar
         const fetchStats = async () => {
-            const token = localStorage.getItem('adminToken');
-            if (!token) return;
             try {
-                const res = await fetch(`${API_URL}/api/admin/stats`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                // Remove strict token requirement for local Bridge Server
+                const res = await fetch(`${API_URL}/api/admin/stats`);
                 const data = await res.json();
                 if (data.revenueToday !== undefined) {
                     setDailyRevenue(data.revenueToday);
-                    setOrderCount(data.orderCount || 0);
-                    // Actualizar gráfica si es hoy
+                    setOrderCount(data.totalOrders || data.orderCount || 0);
+                    setRecentOrders(data.recentOrders || []);
+                    // Actualizar gráfica
                     setChartData(prev => prev.map(d => d.dia === 'Hoy' ? { ...d, ventas: data.revenueToday } : d));
                 }
-            } catch (e) { console.error("Error al cargar stats:", e); }
+            } catch (e) {
+                console.error("❌ [Admin] Error al cargar estadísticas:", e);
+            }
         };
 
         if (isAuth) fetchStats();
@@ -203,6 +204,10 @@ const AdminDashboard = () => {
                     </div>
                 </div>
             );
+        }
+
+        if (activeTab === 'promos') {
+            return <PromotionManager />;
         }
 
         if (activeTab === 'reports') {

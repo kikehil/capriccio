@@ -13,9 +13,9 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Pizza Cerebro | La Mejor Pizza Artesanal",
-  description: "Ordena la mejor pizza artesanal en 3 clicks. Ingredientes premium, orilla de queso y envío directo por WhatsApp. ¡Pide ahora!",
-  keywords: ["pizza", "domicilio", "artesanal", "pizza cerebro", "whatsapp pizza"],
+  title: "Pizza Capriccio | La Mejor Pizza Artesanal",
+  description: "Ordena la mejor pizza artesanal en 3 clicks. Ingredientes premium, orilla de queso y envío directo por WhatsApp con Capriccio. ¡Pide ahora!",
+  keywords: ["pizza", "domicilio", "artesanal", "pizza capriccio", "whatsapp pizza"],
 };
 
 export const viewport = {

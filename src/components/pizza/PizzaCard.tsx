@@ -62,7 +62,7 @@ const PizzaCard: React.FC<PizzaCardProps> = ({ pizza, onAddToCart }) => {
                 {/* Agotado Badge */}
                 {!pizza.activo && (
                     <div className="absolute inset-0 flex items-center justify-center z-20">
-                        <span className="bg-red-600 text-white px-8 py-3 rounded-2xl font-black text-xl italic uppercase tracking-widest shadow-2xl rotate-[-5deg] border-4 border-white">
+                        <span className="bg-capriccio-accent text-white px-8 py-3 rounded-2xl font-black text-xl italic uppercase tracking-widest shadow-2xl rotate-[-5deg] border-4 border-white">
                             AGOTADO
                         </span>
                     </div>
@@ -73,7 +73,7 @@ const PizzaCard: React.FC<PizzaCardProps> = ({ pizza, onAddToCart }) => {
             <div className="p-6 flex flex-col flex-grow">
                 <div className="flex justify-between items-start mb-3">
                     <h3 className={cn(
-                        "text-2xl font-black leading-tight uppercase tracking-tighter italic transition-colors",
+                        "text-2xl font-title font-black leading-tight uppercase tracking-tighter italic transition-colors",
                         pizza.activo ? "text-gray-900" : "text-gray-400"
                     )}>
                         {pizza.nombre}
@@ -81,7 +81,7 @@ const PizzaCard: React.FC<PizzaCardProps> = ({ pizza, onAddToCart }) => {
                     <div className="flex flex-col items-end">
                         <span className={cn(
                             "text-2xl font-black italic transition-colors",
-                            pizza.activo ? "text-red-600" : "text-gray-300"
+                            pizza.activo ? "text-capriccio-gold" : "text-gray-300"
                         )}>
                             ${pizza.precio}
                         </span>
@@ -105,7 +105,7 @@ const PizzaCard: React.FC<PizzaCardProps> = ({ pizza, onAddToCart }) => {
                                 ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none"
                                 : isAdded
                                     ? "bg-green-500 text-white scale-[0.98]"
-                                    : "bg-yellow-400 hover:bg-yellow-500 text-black hover:shadow-yellow-200/50"
+                                    : "bg-capriccio-gold hover:bg-capriccio-gold/90 text-capriccio-dark hover:shadow-capriccio-gold/20 font-brand"
                         )}
                     >
                         <AnimatePresence mode="wait">

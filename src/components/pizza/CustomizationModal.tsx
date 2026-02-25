@@ -56,7 +56,7 @@ const CustomizationModal: React.FC<CustomizationModalProps> = ({ pizza, isOpen, 
                         className="relative bg-white rounded-[3rem] w-full max-w-2xl overflow-hidden shadow-[0_50px_100px_rgba(0,0,0,0.3)] flex flex-col md:flex-row h-[90vh] md:h-auto"
                     >
                         {/* Image Section - Left side on desktop */}
-                        <div className="relative w-full md:w-2/5 h-48 md:h-auto bg-gray-900 overflow-hidden">
+                        <div className="relative w-full md:w-2/5 h-48 md:h-auto bg-capriccio-dark overflow-hidden">
                             <img
                                 src={pizza.imagen}
                                 alt={pizza.nombre}
@@ -64,10 +64,10 @@ const CustomizationModal: React.FC<CustomizationModalProps> = ({ pizza, isOpen, 
                             />
                             <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-black/80 via-transparent to-transparent" />
                             <div className="absolute bottom-6 left-6 text-white">
-                                <span className="bg-yellow-400 text-black px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase inline-block mb-3">
+                                <span className="bg-capriccio-gold text-capriccio-dark px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase inline-block mb-3">
                                     {pizza.categoria}
                                 </span>
-                                <h4 className="text-3xl font-black italic uppercase italic leading-none">{pizza.nombre}</h4>
+                                <h4 className="text-3xl font-title font-black italic uppercase italic leading-none">{pizza.nombre}</h4>
                             </div>
                             <button
                                 onClick={onClose}
@@ -81,7 +81,7 @@ const CustomizationModal: React.FC<CustomizationModalProps> = ({ pizza, isOpen, 
                         <div className="flex-1 flex flex-col max-h-full">
                             <div className="p-8 pb-4 hidden md:flex justify-between items-start">
                                 <div>
-                                    <h2 className="text-3xl font-black text-gray-900 italic uppercase leading-none tracking-tighter mb-1">
+                                    <h2 className="text-3xl font-title font-black text-gray-900 italic uppercase leading-none tracking-tighter mb-1">
                                         Personaliza
                                     </h2>
                                     <p className="text-gray-400 font-bold italic text-sm">Hazla a tu manera, sin límites.</p>
@@ -107,14 +107,14 @@ const CustomizationModal: React.FC<CustomizationModalProps> = ({ pizza, isOpen, 
                                                 className={cn(
                                                     "flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300",
                                                     isSelected
-                                                        ? "border-red-600 bg-red-50/50 shadow-md"
+                                                        ? "border-capriccio-gold bg-capriccio-gold/5 shadow-md"
                                                         : "border-gray-100 hover:border-gray-200 hover:bg-gray-50/50"
                                                 )}
                                             >
                                                 <div className="flex items-center gap-4">
                                                     <div className={cn(
                                                         "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                                                        isSelected ? "bg-red-600 border-red-600" : "border-gray-200"
+                                                        isSelected ? "bg-capriccio-gold border-capriccio-gold" : "border-gray-200"
                                                     )}>
                                                         {isSelected && <Check className="w-4 h-4 text-white stroke-[4px]" />}
                                                     </div>
@@ -126,12 +126,12 @@ const CustomizationModal: React.FC<CustomizationModalProps> = ({ pizza, isOpen, 
                                                     />
                                                     <span className={cn(
                                                         "font-bold text-lg italic transition-colors",
-                                                        isSelected ? "text-red-700" : "text-gray-600"
+                                                        isSelected ? "text-capriccio-dark" : "text-gray-600"
                                                     )}>{extra.nombre}</span>
                                                 </div>
                                                 <span className={cn(
                                                     "font-black text-lg italic",
-                                                    isSelected ? "text-red-600" : "text-gray-400"
+                                                    isSelected ? "text-capriccio-gold" : "text-gray-400"
                                                 )}>+${extra.precio}</span>
                                             </motion.label>
                                         );
@@ -147,7 +147,7 @@ const CustomizationModal: React.FC<CustomizationModalProps> = ({ pizza, isOpen, 
                                 </div>
                                 <button
                                     onClick={() => onConfirm(pizza, selectedExtras, finalPrice)}
-                                    className="flex-1 bg-red-600 text-white py-5 rounded-2xl font-black text-xl italic uppercase tracking-widest shadow-[0_10px_25px_rgba(220,38,38,0.3)] hover:bg-red-700 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3"
+                                    className="flex-1 bg-capriccio-gold text-capriccio-dark py-5 rounded-2xl font-black text-xl italic uppercase tracking-widest shadow-[0_10px_25px_rgba(234,179,8,0.3)] hover:bg-capriccio-gold/90 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3"
                                 >
                                     AGREGAR
                                 </button>

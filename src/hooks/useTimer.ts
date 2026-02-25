@@ -21,10 +21,14 @@ export const useTimer = (createdAt: string) => {
         return () => clearInterval(interval);
     }, [createdAt]);
 
-    const minutes = Math.floor(seconds / 60);
+    const days = Math.floor(seconds / (24 * 3600));
+    const hours = Math.floor((seconds % (24 * 3600)) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = Math.max(0, seconds % 60);
 
     return {
+        days,
+        hours,
         minutes,
         seconds: remainingSeconds,
         totalSeconds: seconds
