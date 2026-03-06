@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Package, Flame, BarChart3, Settings, LayoutDashboard, Menu, X, FileText } from 'lucide-react';
+import { Package, Flame, BarChart3, Settings, LayoutDashboard, Menu, X, FileText, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
-    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports';
-    setActiveTab: (tab: 'stats' | 'products' | 'promos' | 'settings' | 'reports') => void;
+    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users';
+    setActiveTab: (tab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users') => void;
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiveTab }) => {
@@ -16,6 +16,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
     const navItems = [
         { id: 'stats', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'products', label: 'Productos', icon: Package },
+        { id: 'users', label: 'Usuarios', icon: Users },
         { id: 'reports', label: 'Reportes', icon: FileText },
         { id: 'promos', label: 'Promociones', icon: Flame },
         { id: 'settings', label: 'Configuración', icon: Settings },

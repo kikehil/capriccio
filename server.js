@@ -40,28 +40,110 @@ const authenticateJWT = (req, res, next) => {
 app.post('/api/auth/login', async (req, res) => {
     const { username, password, role_request } = req.body;
 
-    // Contraseñas hardcodeadas para la V1, se recomienda mover al .env o DB luego
-    const ADMIN_PASS = process.env.ADMIN_PASS || 'CapriccioAdmin2026!';
-    const COCINA_PASS = process.env.COCINA_PASS || 'CocinaCap2026!';
-    const REP_PASS = process.env.REP_PASS || 'Repartidor2026!';
+    try {
+        // Buscar usuario en DB
+        const result = await db.query('SELECT * FROM usuarios WHERE username = $1 AND role = $2 AND activo = true', [username, role_request]);
 
-    if (role_request === 'admin' && username === 'admin' && password === ADMIN_PASS) {
-        const token = jwt.sign({ username, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
-        return res.json({ token, role: 'admin' });
-    }
-    if (role_request === 'cocina' && password === COCINA_PASS) {
-        const token = jwt.sign({ username: 'cocina', role: 'cocina' }, JWT_SECRET, { expiresIn: '7d' });
-        return res.json({ token, role: 'cocina' });
-    }
-    if (role_request === 'repartidor' && username && password === REP_PASS) {
-        const token = jwt.sign({ username, role: 'repartidor' }, JWT_SECRET, { expiresIn: '1d' });
-        return res.json({ token, role: 'repartidor' });
-    }
+        if (result.rows.length === 0) {
+            // Fallback para admin/cocina si no se ha corrido el script de usuarios aún
+            const ADMIN_PASS = process.env.ADMIN_PASS || 'CapriccioAdmin2026!';
+            const COCINA_PASS = process.env.COCINA_PASS || 'CocinaCap2026!';
 
-    res.status(401).json({ error: 'Credenciales inválidas' });
+            if (role_request === 'admin' && username === 'admin' && password === ADMIN_PASS) {
+                const token = jwt.sign({ username, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+                return res.json({ token, role: 'admin' });
+            }
+            if (role_request === 'cocina' && password === COCINA_PASS) {
+                const token = jwt.sign({ username: 'cocina', role: 'cocina' }, JWT_SECRET, { expiresIn: '7d' });
+                return res.json({ token, role: 'cocina' });
+            }
+            return res.status(401).json({ error: 'Credenciales inválidas' });
+        }
+
+        const user = result.rows[0];
+        const validPass = await bcrypt.compare(password, user.password);
+
+        if (validPass) {
+            const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+            return res.json({ token, role: user.role, nombre: user.nombre_completo });
+        }
+
+        res.status(401).json({ error: 'Credenciales inválidas' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error del servidor' });
+    }
 });
 
 // --- API PRODUCTOS (CRUD) ---
+app.delete('/api/productos/:id', authenticateJWT, async (req, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    try {
+        await db.query('DELETE FROM productos WHERE id = $1', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- API USUARIOS / REPARTIDORES ---
+app.get('/api/usuarios', authenticateJWT, async (req, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    try {
+        const result = await db.query('SELECT id, username, role, nombre_completo, activo, created_at FROM usuarios ORDER BY role, username');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/usuarios', authenticateJWT, async (req, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const { username, password, role, nombre_completo } = req.body;
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const result = await db.query(
+            'INSERT INTO usuarios (username, password, role, nombre_completo) VALUES ($1, $2, $3, $4) RETURNING id, username, role, nombre_completo',
+            [username, hashedPassword, role, nombre_completo]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/usuarios/:id', authenticateJWT, async (req, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    const { username, password, role, nombre_completo, activo } = req.body;
+    try {
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await db.query(
+                'UPDATE usuarios SET username=$1, password=$2, role=$3, nombre_completo=$4, activo=$5 WHERE id=$6',
+                [username, hashedPassword, role, nombre_completo, activo, req.params.id]
+            );
+        } else {
+            await db.query(
+                'UPDATE usuarios SET username=$1, role=$2, nombre_completo=$3, activo=$4 WHERE id=$5',
+                [username, role, nombre_completo, activo, req.params.id]
+            );
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/usuarios/:id', authenticateJWT, async (req, res) => {
+    if (req.user.role !== 'admin') return res.sendStatus(403);
+    try {
+        await db.query('DELETE FROM usuarios WHERE id = $1', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/productos', async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM productos ORDER BY id ASC');

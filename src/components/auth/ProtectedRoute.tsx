@@ -32,7 +32,7 @@ export default function ProtectedRoute({ children, role }: ProtectedRouteProps) 
         setIsSubmitting(true);
         setError('');
 
-        const loginUser = role === 'repartidor' ? username : role;
+        const loginUser = username || role;
 
         try {
             const res = await fetch(`${API_URL}/api/auth/login`, {
@@ -46,7 +46,7 @@ export default function ProtectedRoute({ children, role }: ProtectedRouteProps) 
                 localStorage.setItem(`capriccio_token_${role}`, data.token);
                 // Si es repartidor, guardamos su nombre para el socket
                 if (role === 'repartidor') {
-                    localStorage.setItem('capriccio_repartidor_nombre', username);
+                    localStorage.setItem('capriccio_repartidor_nombre', data.nombre || username);
                 }
                 setIsAuthenticated(true);
             } else {
@@ -72,20 +72,18 @@ export default function ProtectedRoute({ children, role }: ProtectedRouteProps) 
                         {role === 'admin' ? 'Administración' : role === 'cocina' ? 'Cocina' : 'Repartidor'}
                     </h2>
                     <p className="text-slate-400 font-bold italic text-sm mb-8">
-                        {role === 'repartidor' ? 'Ingresa tu nombre y clave de acceso.' : 'Ingresa tus credenciales para acceder al sistema.'}
+                        Ingresa tus credenciales para acceder al sistema.
                     </p>
 
                     <form onSubmit={handleLogin} className="space-y-4">
-                        {role === 'repartidor' && (
-                            <input
-                                type="text"
-                                placeholder="TU NOMBRE (Ej: Juan)"
-                                required
-                                className="w-full bg-slate-50 p-6 rounded-2xl font-black italic uppercase outline-none border-2 border-transparent focus:border-capriccio-gold focus:bg-white transition-all text-center"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                            />
-                        )}
+                        <input
+                            type="text"
+                            placeholder={role === 'repartidor' ? "TU NOMBRE (Ej: Juan)" : "USUARIO"}
+                            required
+                            className="w-full bg-slate-50 p-6 rounded-2xl font-black italic uppercase outline-none border-2 border-transparent focus:border-capriccio-gold focus:bg-white transition-all text-center"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                        />
                         <input
                             type="password"
                             placeholder="CONTRASEÑA"

@@ -10,13 +10,14 @@ import AdminLayout from './AdminLayout';
 import ProductManager from './ProductManager';
 import PromotionManager from './PromotionManager';
 import ReportsModule from './ReportsModule';
+import UserManager from './UserManager';
 import Login from './Login';
 import { pizzas as initialPizzas, Pizza } from '@/data/menu';
 
 import { getSocket, API_URL } from '@/lib/socket';
 
 const AdminDashboard = () => {
-    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports'>('stats');
+    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users'>('stats');
     const [products, setProducts] = React.useState<Pizza[]>(initialPizzas);
     const [dailyRevenue, setDailyRevenue] = React.useState(0);
     const [orderCount, setOrderCount] = React.useState(0);
@@ -97,6 +98,12 @@ const AdminDashboard = () => {
     const renderContent = () => {
         if (activeTab === 'products') {
             return <ProductManager products={products} onUpdate={updateProduct} />;
+        }
+        if (activeTab === 'users') {
+            return <UserManager />;
+        }
+        if (activeTab === 'promos') {
+            return <PromotionManager />;
         }
 
         if (activeTab === 'stats') {
@@ -207,10 +214,6 @@ const AdminDashboard = () => {
                     </div>
                 </div>
             );
-        }
-
-        if (activeTab === 'promos') {
-            return <PromotionManager />;
         }
 
         if (activeTab === 'reports') {
