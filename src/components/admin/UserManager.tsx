@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Users, UserPlus, Trash2, Edit2, Shield, Truck, ChefHat, Check, X, Search } from 'lucide-react';
 import { API_URL } from '@/lib/socket';
 
