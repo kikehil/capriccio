@@ -40,7 +40,7 @@ export default function UserManager() {
 
     const fetchUsuarios = async () => {
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('capriccio_token_admin');
             const res = await fetch(`${API_URL}/api/usuarios`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -57,7 +57,7 @@ export default function UserManager() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('capriccio_token_admin');
         const method = editingUser ? 'PUT' : 'POST';
         const url = editingUser ? `${API_URL}/api/usuarios/${editingUser.id}` : `${API_URL}/api/usuarios`;
 
@@ -83,7 +83,7 @@ export default function UserManager() {
 
     const handleDelete = async (id: number) => {
         if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('capriccio_token_admin');
         try {
             const res = await fetch(`${API_URL}/api/usuarios/${id}`, {
                 method: 'DELETE',
@@ -125,188 +125,223 @@ export default function UserManager() {
 
     const getRoleIcon = (role: string) => {
         switch (role) {
-            case 'admin': return <Shield className="w-4 h-4 text-purple-400" />;
-            case 'cocina': return <ChefHat className="w-4 h-4 text-blue-400" />;
-            case 'repartidor': return <Truck className="w-4 h-4 text-capriccio-gold" />;
+            case 'admin': return <Shield className="w-4 h-4 text-purple-600" />;
+            case 'cocina': return <ChefHat className="w-4 h-4 text-blue-600" />;
+            case 'repartidor': return <Truck className="w-4 h-4 text-amber-600" />;
             default: return <Users className="w-4 h-4" />;
         }
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="space-y-8 max-w-7xl mx-auto">
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                        <Users className="text-capriccio-gold" />
-                        Gestión de Usuarios y Repartidores
+                    <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 flex items-center gap-3">
+                        <div className="p-3 bg-capriccio-gold rounded-2xl shadow-lg shadow-capriccio-gold/20">
+                            <Users className="text-slate-900" size={24} />
+                        </div>
+                        Gestión de Personal
                     </h2>
-                    <p className="text-gray-400">Administra el acceso del personal al sistema.</p>
+                    <p className="text-slate-400 font-bold italic text-sm mt-2">Control de accesos para repartidores, cocina y administración.</p>
                 </div>
                 <button
                     onClick={() => { resetForm(); setShowModal(true); }}
-                    className="flex items-center gap-2 bg-capriccio-gold text-black px-4 py-2 rounded-lg font-bold hover:bg-yellow-500 transition-colors"
+                    className="flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-[1.5rem] font-black italic uppercase tracking-widest hover:bg-black transition-all shadow-xl active:scale-95"
                 >
-                    <UserPlus className="w-5 h-5" />
-                    Nuevo Usuario
+                    <UserPlus className="w-5 h-5 text-capriccio-gold" />
+                    Añadir Usuario
                 </button>
             </div>
 
-            <div className="flex bg-capriccio-dark/50 p-2 rounded-xl border border-white/5 max-w-md">
-                <Search className="text-gray-500 ml-2 mt-2" />
-                <input
-                    type="text"
-                    placeholder="Buscar por usuario o nombre..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-transparent border-none text-white focus:ring-0 w-full px-3 py-2 outline-none"
-                />
+            {/* Toolbar Section */}
+            <div className="bg-white p-4 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 items-center">
+                <div className="relative flex-1 w-full">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                        type="text"
+                        placeholder="Buscar por usuario o nombre..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full bg-slate-50 border-2 border-transparent rounded-2xl pl-12 pr-4 py-3 text-slate-900 font-bold focus:bg-white focus:border-capriccio-gold/20 transition-all outline-none"
+                    />
+                </div>
             </div>
 
-            <div className="bg-capriccio-dark/50 rounded-2xl border border-white/10 overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-white/5 text-gray-400 text-sm uppercase">
-                            <th className="px-6 py-4 font-semibold">Usuario / Nombre</th>
-                            <th className="px-6 py-4 font-semibold">Rol</th>
-                            <th className="px-6 py-4 font-semibold">Estado</th>
-                            <th className="px-6 py-4 font-semibold">Fecha Registro</th>
-                            <th className="px-6 py-4 font-semibold text-right">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {filteredUsers.map((u) => (
-                            <tr key={u.id} className="hover:bg-white/5 transition-colors group">
-                                <td className="px-6 py-4">
-                                    <div className="font-bold text-white">{u.username}</div>
-                                    <div className="text-xs text-gray-500">{u.nombre_completo}</div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 w-fit">
-                                        {getRoleIcon(u.role)}
-                                        <span className="text-sm capitalize text-gray-300">{u.role}</span>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    {u.activo ? (
-                                        <span className="flex items-center gap-1 text-green-400 text-xs font-bold">
-                                            <Check className="w-3 h-3" /> ACTIVO
-                                        </span>
-                                    ) : (
-                                        <span className="flex items-center gap-1 text-red-400 text-xs font-bold">
-                                            <X className="w-3 h-3" /> INACTIVO
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-500">
-                                    {new Date(u.created_at).toLocaleDateString()}
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleEdit(u)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg">
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => handleDelete(u.id)} className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </td>
+            {/* Table Section */}
+            <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-50 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50/50 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">
+                                <th className="px-8 py-6">Usuario / Nombre</th>
+                                <th className="px-8 py-6 text-center">Rol</th>
+                                <th className="px-8 py-6 text-center">Estado</th>
+                                <th className="px-8 py-6">Fecha Registro</th>
+                                <th className="px-8 py-6 text-right">Acciones</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredUsers.map((u) => (
+                                <tr key={u.id} className="hover:bg-slate-50/50 transition-colors group">
+                                    <td className="px-8 py-6">
+                                        <div className="font-black text-slate-900 italic uppercase">{u.username}</div>
+                                        <div className="text-xs text-slate-400 font-bold italic">{u.nombre_completo}</div>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <div className="flex items-center justify-center gap-2 px-4 py-1.5 rounded-full bg-white border-2 border-slate-100 w-fit mx-auto">
+                                            {getRoleIcon(u.role)}
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">{u.role}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-6 text-center">
+                                        {u.activo ? (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-50 text-green-600 text-[10px] font-black uppercase tracking-widest">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> ACTIVO
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> INACTIVO
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <p className="text-xs font-bold text-slate-400">
+                                            {new Date(u.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </p>
+                                    </td>
+                                    <td className="px-8 py-6 text-right">
+                                        <div className="flex justify-end gap-3">
+                                            <button onClick={() => handleEdit(u)} className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all">
+                                                <Edit2 size={18} />
+                                            </button>
+                                            <button onClick={() => handleDelete(u.id)} className="p-3 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all">
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
                 {filteredUsers.length === 0 && !loading && (
-                    <div className="p-12 text-center text-gray-500">
-                        No se encontraron usuarios.
+                    <div className="py-20 text-center space-y-4">
+                        <Users className="mx-auto text-slate-100" size={64} />
+                        <p className="text-slate-400 font-bold italic">No se han encontrado miembros del personal.</p>
                     </div>
                 )}
             </div>
 
-            {showModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                    <div className="bg-capriccio-dark border border-white/10 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-white/5 flex justify-between items-center">
-                            <h3 className="text-xl font-bold flex items-center gap-2">
-                                {editingUser ? <Edit2 className="text-blue-400" /> : <UserPlus className="text-capriccio-gold" />}
-                                {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
-                            </h3>
-                            <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-white">
-                                <X />
-                            </button>
-                        </div>
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-400">Usuario (Login)</label>
-                                <input
-                                    required
-                                    value={form.username}
-                                    onChange={e => setForm({ ...form, username: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-capriccio-gold outline-none"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-400">Nombre Completo</label>
-                                <input
-                                    required
-                                    value={form.nombre_completo}
-                                    onChange={e => setForm({ ...form, nombre_completo: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-capriccio-gold outline-none"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-400">Contraseña {editingUser && '(Dejar vacío para no cambiar)'}</label>
-                                <input
-                                    type="password"
-                                    required={!editingUser}
-                                    value={form.password}
-                                    onChange={e => setForm({ ...form, password: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-capriccio-gold outline-none"
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-gray-400">Rol</label>
-                                    <select
-                                        value={form.role}
-                                        onChange={e => setForm({ ...form, role: e.target.value as any })}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-capriccio-gold outline-none"
-                                    >
-                                        <option value="repartidor">Repartidor</option>
-                                        <option value="cocina">Cocina</option>
-                                        <option value="admin">Administrador</option>
-                                    </select>
+            {/* Modal Update */}
+            <AnimatePresence>
+                {showModal && (
+                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[150] flex items-center justify-center p-6">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden border border-white/20"
+                        >
+                            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                <div>
+                                    <h3 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">
+                                        {editingUser ? 'Actualizar Miembro' : 'Nuevo Miembro'}
+                                    </h3>
+                                    <p className="text-xs text-slate-400 font-bold italic">Configura las credenciales de acceso.</p>
                                 </div>
+                                <button onClick={() => setShowModal(false)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 hover:text-slate-900 shadow-sm transition-all border border-transparent hover:border-slate-100">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Usuario (ID Login)</label>
+                                        <input
+                                            required
+                                            value={form.username}
+                                            onChange={e => setForm({ ...form, username: e.target.value })}
+                                            className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 text-slate-900 font-bold focus:bg-white focus:border-capriccio-gold/20 transition-all outline-none"
+                                            placeholder="ej: juan.perez"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Rol Operativo</label>
+                                        <select
+                                            value={form.role}
+                                            onChange={e => setForm({ ...form, role: e.target.value as any })}
+                                            className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 text-slate-900 font-bold focus:bg-white focus:border-capriccio-gold/20 transition-all outline-none appearance-none cursor-pointer"
+                                        >
+                                            <option value="repartidor">Repartidor</option>
+                                            <option value="cocina">Cocina</option>
+                                            <option value="admin">Administrador</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-gray-400">Estado</label>
-                                    <div className="flex items-center gap-2 mt-3">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre Completo</label>
+                                    <input
+                                        required
+                                        value={form.nombre_completo}
+                                        onChange={e => setForm({ ...form, nombre_completo: e.target.value })}
+                                        className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 text-slate-900 font-bold focus:bg-white focus:border-capriccio-gold/20 transition-all outline-none"
+                                        placeholder="Nombre del personal"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                        Contraseña {editingUser && '(Dejar vacío para no cambiar)'}
+                                    </label>
+                                    <input
+                                        type="password"
+                                        required={!editingUser}
+                                        value={form.password}
+                                        onChange={e => setForm({ ...form, password: e.target.value })}
+                                        className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 text-slate-900 font-bold focus:bg-white focus:border-capriccio-gold/20 transition-all outline-none"
+                                        placeholder="••••••••"
+                                    />
+                                </div>
+
+                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <div className="flex items-center h-5">
                                         <input
                                             type="checkbox"
                                             checked={form.activo}
                                             onChange={e => setForm({ ...form, activo: e.target.checked })}
-                                            className="w-5 h-5 rounded border-white/10 bg-white/5 text-capriccio-gold focus:ring-capriccio-gold"
+                                            className="w-6 h-6 rounded-lg border-2 border-slate-200 text-capriccio-gold focus:ring-capriccio-gold focus:ring-offset-0 transition-all cursor-pointer"
                                         />
-                                        <span className="text-gray-300">Activo</span>
+                                    </div>
+                                    <div className="ml-2 text-sm">
+                                        <label className="font-black italic uppercase text-slate-700 tracking-tighter">Acceso Habilitado</label>
+                                        <p className="text-[10px] text-slate-400 font-bold">El usuario podrá iniciar sesión en su plataforma correspondiente.</p>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="pt-4 flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1 bg-white/5 text-white py-3 rounded-xl font-bold hover:bg-white/10 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 bg-capriccio-gold text-black py-3 rounded-xl font-bold hover:bg-yellow-500 transition-colors"
-                                >
-                                    Guardar
-                                </button>
-                            </div>
-                        </form>
+
+                                <div className="pt-4 grid grid-cols-2 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowModal(false)}
+                                        className="py-5 bg-slate-100 text-slate-500 rounded-2xl font-black italic uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="py-5 bg-slate-900 text-white rounded-2xl font-black italic uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-900/10 active:scale-95 flex items-center justify-center gap-2"
+                                    >
+                                        <Check className="text-capriccio-gold" size={20} />
+                                        Guardar Cambios
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
                     </div>
-                </div>
-            )}
+                )}
+            </AnimatePresence>
         </div>
     );
 }
