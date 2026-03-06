@@ -38,7 +38,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
                 isSidebarOpen ? "translate-x-0" : "-translate-x-full"
             )}>
                 <div className="flex flex-col items-center mb-12">
-                    <img src="/img/capriccio-logo.png" alt="Logo" className="w-40 h-auto drop-shadow-xl mb-4" />
+                    <img src="/img/capriccio-logo.svg" alt="Logo" className="w-40 h-auto drop-shadow-xl mb-4" />
                     <span className="text-capriccio-gold text-xs font-black tracking-[0.3em] uppercase border-y border-capriccio-gold/20 py-1">Panel Admin</span>
                 </div>
 

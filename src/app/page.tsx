@@ -221,7 +221,7 @@ export default function Home() {
       <footer className="bg-white py-20 border-t border-gray-100">
         <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12">
           <div>
-            <img src="/img/capriccio-logo.png" alt="Capriccio Logo" className="h-16 w-auto mb-6 drop-shadow-lg" />
+            <img src="/img/capriccio-logo.svg" alt="Capriccio Logo" className="h-16 w-auto mb-6 drop-shadow-xl" />
             <p className="text-gray-500 font-medium">Las mejores pizzas de la ciudad, elaboradas con ingredientes frescos y el amor que solo nosotros sabemos ponerle.</p>
           </div>
           <div>
