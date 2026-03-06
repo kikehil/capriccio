@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 const DeliveryDashboard = dynamic(
     () => import('@/components/delivery/DeliveryDashboard'),
@@ -9,8 +10,10 @@ const DeliveryDashboard = dynamic(
 
 export default function RepartidorPage() {
     return (
-        <div className="bg-[#f0f2f5] min-h-screen">
-            <DeliveryDashboard />
-        </div>
+        <ProtectedRoute role="repartidor">
+            <div className="bg-[#f0f2f5] min-h-screen">
+                <DeliveryDashboard />
+            </div>
+        </ProtectedRoute>
     );
 }

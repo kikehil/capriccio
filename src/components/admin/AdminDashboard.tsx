@@ -16,7 +16,6 @@ import { pizzas as initialPizzas, Pizza } from '@/data/menu';
 import { getSocket, API_URL } from '@/lib/socket';
 
 const AdminDashboard = () => {
-    const [isAuth, setIsAuth] = React.useState(false);
     const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports'>('stats');
     const [products, setProducts] = React.useState<Pizza[]>(initialPizzas);
     const [dailyRevenue, setDailyRevenue] = React.useState(0);
@@ -38,8 +37,12 @@ const AdminDashboard = () => {
         // Cargar estadísticas reales al entrar
         const fetchStats = async () => {
             try {
-                // Remove strict token requirement for local Bridge Server
-                const res = await fetch(`${API_URL}/api/admin/stats`);
+                const token = localStorage.getItem('capriccio_token_admin');
+                const res = await fetch(`${API_URL}/api/admin/stats`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
                 const data = await res.json();
                 if (data.revenueToday !== undefined) {
                     setDailyRevenue(data.revenueToday);
@@ -53,7 +56,7 @@ const AdminDashboard = () => {
             }
         };
 
-        if (isAuth) fetchStats();
+        fetchStats();
 
         if (!socket) return;
 
@@ -87,9 +90,9 @@ const AdminDashboard = () => {
         if (socket) socket.emit('actualizar_menu', newProducts);
     };
 
-    if (!isAuth) {
+    /* if (!isAuth) {
         return <Login onLogin={setIsAuth} />;
-    }
+    } */
 
     const renderContent = () => {
         if (activeTab === 'products') {
@@ -211,7 +214,7 @@ const AdminDashboard = () => {
         }
 
         if (activeTab === 'reports') {
-            return <ReportsModule ventas={recentOrders} />;
+            return <ReportsModule />;
         }
 
         return (

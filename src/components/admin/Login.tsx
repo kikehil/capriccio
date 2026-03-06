@@ -46,7 +46,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center rotate-12 shadow-xl shadow-red-600/20 mx-auto mb-6">
                         <Flame className="text-white fill-white" size={32} />
                     </div>
-                    <h1 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase leading-none">PIZZA CEREBRO</h1>
+                    <h1 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase leading-none">PIZZA CAPRICCIO</h1>
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em] mt-3">Panel de Control de Alto Nivel</p>
                 </div>
 
@@ -58,7 +58,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             <input
                                 type="text"
                                 required
-                                className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-red-600/20 focus:bg-white outline-none transition-all font-bold text-slate-900"
+                                className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-capriccio-gold/20 focus:bg-white outline-none transition-all font-bold text-slate-900"
                                 placeholder="Usuario"
                                 onChange={(e) => setCredentials({ ...credentials, user: e.target.value })}
                             />
@@ -72,7 +72,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             <input
                                 type="password"
                                 required
-                                className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-red-600/20 focus:bg-white outline-none transition-all font-bold text-slate-900"
+                                className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-capriccio-gold/20 focus:bg-white outline-none transition-all font-bold text-slate-900"
                                 placeholder="••••••••"
                                 onChange={(e) => setCredentials({ ...credentials, pass: e.target.value })}
                             />
@@ -95,7 +95,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
                     <button
                         disabled={loading}
-                        className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-lg italic uppercase tracking-widest hover:bg-black transition-all shadow-xl active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 group"
+                        className="w-full py-5 bg-capriccio-dark text-white rounded-[1.5rem] font-black text-lg italic uppercase tracking-widest hover:bg-black transition-all shadow-xl active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 group"
                     >
                         {loading ? (
                             <div className="w-6 h-6 border-4 border-white/20 border-t-white rounded-full animate-spin" />
@@ -110,7 +110,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
                 <div className="mt-8 pt-8 border-t border-slate-50 text-center">
                     <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">
-                        Sistema Encriptado &copy; 2026 Pizza Cerebro S.A.
+                        Sistema Encriptado &copy; 2026 Pizza Capriccio S.A.
                     </p>
                 </div>
             </motion.div>

@@ -85,10 +85,8 @@ export default function Home() {
     if (isOrdering) return;
     setIsOrdering(true);
     const totalPrice = cart.reduce((acc, item) => acc + (item.totalItemPrice * item.quantity), 0);
-    const orderId = `ord-${Math.floor(Math.random() * 9000) + 1000}`;
 
     const pedido = {
-      id: orderId,
       items: cart,
       total: totalPrice,
       createdAt: new Date().toISOString(),
@@ -96,7 +94,9 @@ export default function Home() {
       cliente_nombre: userData.nombre,
       direccion: userData.direccion,
       telefono: userData.telefono,
-      referencias: userData.referencias
+      referencias: userData.referencias,
+      lat: userData.lat,
+      lng: userData.lng
     };
 
     try {
@@ -107,7 +107,11 @@ export default function Home() {
       });
 
       if (response.ok) {
-        showNotification(`¡Pedido #${orderId.split('-')[1]} recibido! Preparando su pizza...`, 'success');
+        const data = await response.json();
+        const finalOrderId = data.order_id || 'procesado';
+        const displayId = finalOrderId.includes('-') ? finalOrderId.split('-')[1] : finalOrderId;
+
+        showNotification(`¡Pedido #${displayId} recibido! Preparando su pizza...`, 'success');
         setCart([]);
         setIsCheckoutOpen(false);
       } else {

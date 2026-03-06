@@ -4,24 +4,36 @@ const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ||
     (typeof window !== 'undefined'
-        ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? `${window.location.protocol}//${window.location.hostname}:3001`
-            : `${window.location.protocol}//${window.location.hostname}`)
+        ? (
+            // Si estamos en localhost o usando el puerto de desarrollo 3000, apuntamos al backend en 3001
+            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000')
+                ? `${window.location.protocol}//${window.location.hostname}:3001`
+                // Si el hostname parece una IP (contiene al menos un punto y solo dígitos y puntos), usamos el puerto 3001
+                : (/^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname)
+                    ? `${window.location.protocol}//${window.location.hostname}:3001`
+                    : `${window.location.protocol}//${window.location.hostname}`)
+        )
         : 'http://localhost:3001');
 
-// En el cliente, si no hay URL definida, intentamos usar el host actual
+// En el cliente, si no hay URL definida, intentamos usar el host actual (incluyendo puerto 3001 cuando corresponde)
 const getSocketUrl = () => {
     if (typeof window !== 'undefined') {
         const protocol = window.location.protocol;
         const host = window.location.hostname;
+        const port = window.location.port;
 
         if (process.env.NEXT_PUBLIC_SOCKET_URL) return process.env.NEXT_PUBLIC_SOCKET_URL;
 
-        // Si estamos en un VPS (no localhost), preferimos no usar puerto
-        // para que Nginx maneje el proxy a través de /socket.io/
-        if (host !== 'localhost' && host !== '127.0.0.1') {
-            return `${protocol}//${host}`;
+        // Caso localhost o desarrollo
+        if (host === 'localhost' || host === '127.0.0.1' || port === '3000') {
+            return `${protocol}//${host}:3001`;
         }
+        // Caso IP del VPS
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+            return `${protocol}//${host}:3001`;
+        }
+        // Caso dominio normal (se asume que Nginx proxy está configurado)
+        return `${protocol}//${host}`;
     }
     return SOCKET_URL;
 };

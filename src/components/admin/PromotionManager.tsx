@@ -52,9 +52,13 @@ const PromotionManager = () => {
         const url = id ? `${API_URL}/api/promos/${id}` : `${API_URL}/api/promos`;
 
         try {
+            const token = localStorage.getItem('capriccio_token_admin');
             const res = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(editForm)
             });
             if (res.ok) {
@@ -69,7 +73,13 @@ const PromotionManager = () => {
     const handleDelete = async (id: number) => {
         if (!confirm('¿Seguro que quieres eliminar esta promoción?')) return;
         try {
-            await fetch(`${API_URL}/api/promos/${id}`, { method: 'DELETE' });
+            const token = localStorage.getItem('capriccio_token_admin');
+            await fetch(`${API_URL}/api/promos/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             fetchPromos();
         } catch (e) { console.error("Error deleting promo:", e); }
     };

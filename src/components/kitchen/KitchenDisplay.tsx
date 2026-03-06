@@ -29,7 +29,12 @@ const KitchenDisplay = () => {
         setIsLoaded(false);
         console.log("🔍 [Cocina] Sincronizando desde:", `${API_URL}/api/pedidos`);
         try {
-            const response = await fetch(`${API_URL}/api/pedidos`);
+            const token = localStorage.getItem('capriccio_token_cocina');
+            const response = await fetch(`${API_URL}/api/pedidos`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
 
             const data = await response.json();
@@ -37,11 +42,11 @@ const KitchenDisplay = () => {
             // Mapear y filtrar pedidos activos (recibido o preparando)
             // ORDENAR: Más recientes primero para que no se pierdan al final
             const activeOrders = data
-                .filter((o: any) => o.status === 'recibido' || o.status === 'preparando' || o.status === 'pending')
+                .filter((o: any) => o.status === 'recibido' || o.status === 'preparando' || o.status === 'pending' || o.status === 'pendiente')
                 .map((o: any) => ({
                     ...o,
                     order_id: o.order_id || o.id,
-                    status: (o.status === 'recibido' || o.status === 'pending') ? 'pending' : 'preparing'
+                    status: (o.status === 'recibido' || o.status === 'pending' || o.status === 'pendiente') ? 'pending' : 'preparing'
                 }))
                 .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -111,9 +116,13 @@ const KitchenDisplay = () => {
         if (!order) return;
 
         try {
+            const token = localStorage.getItem('capriccio_token_cocina');
             const resp = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     status: 'listo',
                     repartidor: repartidor || 'S/A'

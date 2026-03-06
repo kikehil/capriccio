@@ -19,7 +19,7 @@ const io = new Server(server, {
     }
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'pizza-cerebro-super-secret-2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'pizza-capriccio-super-secret-2026';
 
 // --- MIDDLEWARE DE AUTENTICACIÓN ---
 const authenticateJWT = (req, res, next) => {
@@ -38,12 +38,26 @@ const authenticateJWT = (req, res, next) => {
 
 // --- AUTH ENDPOINTS ---
 app.post('/api/auth/login', async (req, res) => {
-    const { username, password } = req.body;
-    // Autenticación simple para demo
-    if (username === 'admin' && password === 'pizza2026') {
-        const token = jwt.sign({ username, role: 'admin' }, JWT_SECRET, { expiresIn: '1d' });
-        return res.json({ token });
+    const { username, password, role_request } = req.body;
+
+    // Contraseñas hardcodeadas para la V1, se recomienda mover al .env o DB luego
+    const ADMIN_PASS = process.env.ADMIN_PASS || 'CapriccioAdmin2026!';
+    const COCINA_PASS = process.env.COCINA_PASS || 'CocinaCap2026!';
+    const REP_PASS = process.env.REP_PASS || 'Repartidor2026!';
+
+    if (role_request === 'admin' && username === 'admin' && password === ADMIN_PASS) {
+        const token = jwt.sign({ username, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+        return res.json({ token, role: 'admin' });
     }
+    if (role_request === 'cocina' && password === COCINA_PASS) {
+        const token = jwt.sign({ username: 'cocina', role: 'cocina' }, JWT_SECRET, { expiresIn: '7d' });
+        return res.json({ token, role: 'cocina' });
+    }
+    if (role_request === 'repartidor' && username && password === REP_PASS) {
+        const token = jwt.sign({ username, role: 'repartidor' }, JWT_SECRET, { expiresIn: '1d' });
+        return res.json({ token, role: 'repartidor' });
+    }
+
     res.status(401).json({ error: 'Credenciales inválidas' });
 });
 
@@ -91,27 +105,88 @@ app.patch('/api/productos/:id', authenticateJWT, async (req, res) => {
 });
 
 // --- API PEDIDOS (TRANSACCIONAL) ---
+app.get('/api/pedidos', authenticateJWT, async (req, res) => {
+    try {
+        const result = await db.query(
+            "SELECT * FROM pedidos WHERE status != 'entregado' ORDER BY created_at DESC LIMIT 100"
+        );
+
+        const pedidosConItems = await Promise.all(result.rows.map(async (pedido) => {
+            const itemsRes = await db.query(
+                `SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, d.precio_unitario as "totalItemPrice",
+                        COALESCE(
+                            json_agg(
+                                json_build_object('nombre', e.extra_nombre, 'precio', e.precio_extra)
+                            ) FILTER (WHERE e.id IS NOT NULL), '[]'
+                        ) as extras
+                 FROM detalle_pedidos d
+                 LEFT JOIN extras_pedidos e ON d.id = e.detalle_id
+                 WHERE d.pedido_id = $1
+                 GROUP BY d.id`,
+                [pedido.id]
+            );
+
+            return {
+                ...pedido,
+                id: pedido.order_id || pedido.id,
+                order_id: pedido.order_id,
+                createdAt: pedido.created_at,
+                timestamp: pedido.created_at ? new Date(pedido.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : undefined,
+                items: itemsRes.rows
+            };
+        }));
+
+        res.json(pedidosConItems);
+    } catch (err) {
+        console.error('Error fetching pedidos GET:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/pedidos', async (req, res) => {
-    const { id: orderId, cliente_nombre, telefono, direccion, referencias, total, items, lat, lng } = req.body;
+    const { cliente_nombre, telefono, direccion, referencias, items, lat, lng } = req.body;
     const connection = await db.getTransaction();
+    const crypto = require('crypto');
+    const orderId = `ord-${crypto.randomBytes(3).toString('hex')}`;
 
     try {
         await connection.begin();
 
-        // 1. Insertar en tabla pedidos
+        // 1. Calcular el total real consultando la base de datos
+        let totalCalculado = 0;
+        const productosRes = await connection.client.query('SELECT nombre, precio FROM productos');
+        const productosMap = new Map();
+        productosRes.rows.forEach(p => productosMap.set(p.nombre, Number(p.precio)));
+
+        const itemsValidados = items.map(item => {
+            const precioBase = productosMap.get(item.nombre);
+            const precioSeguro = precioBase !== undefined ? precioBase : Number(item.totalItemPrice || 0);
+
+            const extrasSum = (item.extras || []).reduce((acc, ex) => acc + Number(ex.precio || 0), 0);
+            const totalItemSeguro = precioSeguro + extrasSum;
+
+            totalCalculado += totalItemSeguro * item.quantity;
+
+            return {
+                ...item,
+                totalItemPriceSeguro: totalItemSeguro
+            };
+        });
+
+        // 2. Insertar en tabla pedidos
         const pedidoRes = await connection.client.query(
             `INSERT INTO pedidos (order_id, cliente_nombre, telefono, direccion, referencias, total, lat, lng) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-            [orderId, cliente_nombre, telefono, direccion, referencias, total, lat, lng]
+            [orderId, cliente_nombre, telefono, direccion, referencias, totalCalculado, lat, lng]
         );
         const pedidoId = pedidoRes.rows[0].id;
 
-        // 2. Insertar items y extras
-        for (const item of items) {
+        // 3. Insertar items y extras
+        for (const item of itemsValidados) {
             const itemRes = await connection.client.query(
                 `INSERT INTO detalle_pedidos (pedido_id, pizza_nombre, cantidad, precio_unitario) 
                  VALUES ($1, $2, $3, $4) RETURNING id`,
-                [pedidoId, item.nombre, item.quantity, item.totalItemPrice]
+                [pedidoId, item.nombre, item.quantity, item.totalItemPriceSeguro]
             );
             const detailId = itemRes.rows[0].id;
 
@@ -128,13 +203,23 @@ app.post('/api/pedidos', async (req, res) => {
 
         await connection.commit();
 
-        const pedidoCompleto = { ...req.body, db_id: pedidoId, status: 'pendiente' };
-        console.log(`🚀 Pedido ${orderId} procesado exitosamente en Postgres.`);
+        const timestampStr = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        const pedidoCompleto = {
+            ...req.body,
+            id: orderId,
+            order_id: orderId,
+            db_id: pedidoId,
+            status: 'pendiente',
+            total: totalCalculado,
+            timestamp: timestampStr,
+            createdAt: new Date().toISOString()
+        };
+        console.log(`🚀 Pedido ${orderId} procesado exitosamente en Postgres. Total calculado: $${totalCalculado}`);
 
         // Emitir a Cocina y Admin
         io.emit('nuevo_pedido', pedidoCompleto);
 
-        res.status(201).json({ success: true, id: pedidoId });
+        res.status(201).json({ success: true, id: pedidoId, order_id: orderId });
     } catch (err) {
         await connection.rollback();
         console.error('❌ Error en transacción de pedido:', err);
@@ -144,7 +229,7 @@ app.post('/api/pedidos', async (req, res) => {
     }
 });
 
-app.get('/api/pedidos/status/:status', async (req, res) => {
+app.get('/api/pedidos/status/:status', authenticateJWT, async (req, res) => {
     const { status } = req.params;
     try {
         const result = await db.query(
@@ -152,10 +237,19 @@ app.get('/api/pedidos/status/:status', async (req, res) => {
             [status]
         );
 
-        // Cargar items para cada pedido para que el repartidor los vea
+        // Cargar items para cada pedido para que el repartidor los vea con extras incluídos
         const pedidosConItems = await Promise.all(result.rows.map(async (pedido) => {
             const itemsRes = await db.query(
-                'SELECT pizza_nombre as nombre, cantidad as quantity FROM detalle_pedidos WHERE pedido_id = $1',
+                `SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, 
+                        COALESCE(
+                            json_agg(
+                                json_build_object('nombre', e.extra_nombre)
+                            ) FILTER (WHERE e.id IS NOT NULL), '[]'
+                        ) as extras
+                 FROM detalle_pedidos d
+                 LEFT JOIN extras_pedidos e ON d.id = e.detalle_id
+                 WHERE d.pedido_id = $1
+                 GROUP BY d.id, d.pizza_nombre, d.cantidad`,
                 [pedido.id]
             );
             return { ...pedido, items: itemsRes.rows };
@@ -167,31 +261,65 @@ app.get('/api/pedidos/status/:status', async (req, res) => {
     }
 });
 
-app.patch('/api/pedidos/:id/status', async (req, res) => {
+app.patch('/api/pedidos/:id/status', authenticateJWT, async (req, res) => {
     const { id } = req.params; // order_id string
-    const { status } = req.body;
+    const { status, repartidor } = req.body;
 
     try {
-        const result = await db.query(
-            'UPDATE pedidos SET status = $1 WHERE order_id = $2 RETURNING *',
-            [status, id]
-        );
+        let result;
+        if (repartidor) {
+            if (status === 'entregado') {
+                result = await db.query(
+                    'UPDATE pedidos SET status = $1, repartidor = $2, delivered_at = CURRENT_TIMESTAMP WHERE order_id = $3 RETURNING *',
+                    [status, repartidor, id]
+                );
+            } else {
+                result = await db.query(
+                    'UPDATE pedidos SET status = $1, repartidor = $2 WHERE order_id = $3 RETURNING *',
+                    [status, repartidor, id]
+                );
+            }
+        } else {
+            if (status === 'entregado') {
+                result = await db.query(
+                    'UPDATE pedidos SET status = $1, delivered_at = CURRENT_TIMESTAMP WHERE order_id = $2 RETURNING *',
+                    [status, id]
+                );
+            } else {
+                result = await db.query(
+                    'UPDATE pedidos SET status = $1 WHERE order_id = $2 RETURNING *',
+                    [status, id]
+                );
+            }
+        }
 
         const pedido = result.rows[0];
-        if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
+        if (!pedido) {
+            console.error(`❌ [STATUS CHANGE ERROR] No se encontró pedido con order_id: ${id}`);
+            return res.status(404).json({ error: 'Pedido no encontrado' });
+        }
 
-        console.log(`🔄 [STATUS CHANGE] Order ${id} -> ${status}`);
+        console.log(`✅ [STATUS CHANGE SUCCESS] Order ${id} -> ${status} (Repartidor: ${pedido.repartidor || 'S/A'}). Filas afectadas: ${result.rowCount}`);
 
         // --- SIMULACIÓN WHATSAPP ---
         if (status === 'en_camino') {
             console.log(`📱 [WhatsApp Simulator] Enviando a ${pedido.telefono}: 
-            "¡Hola ${pedido.cliente_nombre}! Tu pizza de Pizza Cerebro ya va en camino. Estará ahí en minutos. 🛵💨"`);
+            "¡Hola ${pedido.cliente_nombre}! Tu pizza de Pizza Capriccio ya va en camino. Estará ahí en minutos. 🛵💨"`);
         }
 
         // --- LOGÍSTICA SOCKETS ---
         if (status === 'listo') {
             const itemsRes = await db.query(
-                'SELECT pizza_nombre as nombre, cantidad as quantity FROM detalle_pedidos WHERE pedido_id = $1',
+                `SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, 
+                        COALESCE(
+                            json_agg(
+                                json_build_object('nombre', e.extra_nombre)
+                            ) FILTER (WHERE e.id IS NOT NULL), '[]'
+                        ) as extras
+                 FROM detalle_pedidos d
+                 LEFT JOIN extras_pedidos e ON d.id = e.detalle_id
+                 WHERE d.pedido_id = $1
+                 GROUP BY d.id, d.pizza_nombre, d.cantidad`,
                 [pedido.id]
             );
             const fullPedido = {
@@ -206,6 +334,59 @@ app.patch('/api/pedidos/:id/status', async (req, res) => {
         }
 
         io.emit('actualizacion_status_global', { id, status });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- API PROMOCIONES ---
+app.get('/api/promos', async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM promociones WHERE activo = true ORDER BY id ASC');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/promos', authenticateJWT, async (req, res) => {
+    const { titulo, subtitulo, precio, color, imagen, badge } = req.body;
+    try {
+        const result = await db.query(
+            'INSERT INTO promociones (titulo, subtitulo, precio, color, imagen, badge) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [titulo, subtitulo, precio, color, imagen, badge]
+        );
+        const allPromos = await db.query('SELECT * FROM promociones WHERE activo = true ORDER BY id ASC');
+        io.emit('promos_actualizadas', allPromos.rows);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/promos/:id', authenticateJWT, async (req, res) => {
+    const { id } = req.params;
+    const { titulo, subtitulo, precio, color, imagen, badge } = req.body;
+    try {
+        const result = await db.query(
+            'UPDATE promociones SET titulo=$1, subtitulo=$2, precio=$3, color=$4, imagen=$5, badge=$6 WHERE id=$7 RETURNING *',
+            [titulo, subtitulo, precio, color, imagen, badge, id]
+        );
+        const allPromos = await db.query('SELECT * FROM promociones WHERE activo = true ORDER BY id ASC');
+        io.emit('promos_actualizadas', allPromos.rows);
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/promos/:id', authenticateJWT, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await db.query('DELETE FROM promociones WHERE id=$1', [id]);
+        const allPromos = await db.query('SELECT * FROM promociones WHERE activo = true ORDER BY id ASC');
+        io.emit('promos_actualizadas', allPromos.rows);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -240,20 +421,89 @@ app.get('/api/admin/stats', authenticateJWT, async (req, res) => {
     }
 });
 
+// --- ADMIN REPORTS ---
+app.get('/api/admin/reportes', authenticateJWT, async (req, res) => {
+    const { inicio, fin } = req.query;
+    try {
+        let queryStr = 'SELECT * FROM pedidos';
+        const params = [];
+
+        if (inicio && fin) {
+            // Include entire day for the end date by adding '23:59:59'
+            queryStr += ' WHERE Date(created_at) >= $1 AND created_at <= $2::timestamp + interval \'1 day\' - interval \'1 second\'';
+            params.push(inicio, fin);
+        } else if (inicio) {
+            queryStr += ' WHERE Date(created_at) >= $1';
+            params.push(inicio);
+        } else if (fin) {
+            queryStr += ' WHERE created_at <= $1::timestamp + interval \'1 day\' - interval \'1 second\'';
+            params.push(fin);
+        }
+
+        queryStr += ' ORDER BY created_at DESC';
+        const result = await db.query(queryStr, params);
+
+        const pedidosConItems = await Promise.all(result.rows.map(async (pedido) => {
+            const itemsRes = await db.query(
+                `SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, d.precio_unitario as "totalItemPrice",
+                        COALESCE(
+                            json_agg(
+                                json_build_object('nombre', e.extra_nombre, 'precio', e.precio_extra)
+                            ) FILTER (WHERE e.id IS NOT NULL), '[]'
+                        ) as extras
+                 FROM detalle_pedidos d
+                 LEFT JOIN extras_pedidos e ON d.id = e.detalle_id
+                 WHERE d.pedido_id = $1
+                 GROUP BY d.id`,
+                [pedido.id]
+            );
+            return {
+                ...pedido,
+                id: pedido.order_id || pedido.id.toString(),
+                createdAt: pedido.created_at,
+                deliveredAt: pedido.delivered_at,
+                timestamp: pedido.created_at ? new Date(pedido.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : undefined,
+                items: itemsRes.rows,
+                // Add explicit delivered status for PDF/table UI
+                pago_confirmado: true
+            };
+        }));
+
+        res.json(pedidosConItems);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- SOCKETS ---
+let repartidoresOnline = {}; // { socketId: { nombre, id } }
+
 io.on('connection', (socket) => {
     console.log('--- Dispositivo conectado:', socket.id);
+
+    // Enviar lista actual inmediatamente a quien se conecta
+    socket.emit('repartidores_online', Object.values(repartidoresOnline));
+
+    socket.on('registro_repartidor', (nombre) => {
+        repartidoresOnline[socket.id] = { nombre, socketId: socket.id };
+        console.log(`🚛 Repartidor registrado: ${nombre}`);
+        io.emit('repartidores_online', Object.values(repartidoresOnline));
+    });
 
     socket.on('actualizar_menu', async (updatedMenu) => {
         io.emit('menu_actualizado', updatedMenu);
     });
 
     socket.on('disconnect', () => {
+        if (repartidoresOnline[socket.id]) {
+            delete repartidoresOnline[socket.id];
+            io.emit('repartidores_online', Object.values(repartidoresOnline));
+        }
         console.log('--- Dispositivo desconectado:', socket.id);
     });
 });
 
 const PORT = 3001;
 server.listen(PORT, () => {
-    console.log(`🚀 SERVIDOR PROFESIONAL OPERATIVO en http://localhost:${PORT}`);
+    console.log(`🚀 SERVIDOR CAPRICCIO PROFESIONAL en http://localhost:${PORT}`);
 });

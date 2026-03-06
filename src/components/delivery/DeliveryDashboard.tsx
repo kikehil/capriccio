@@ -37,7 +37,12 @@ const DeliveryDashboard = () => {
     const fetchInitialOrders = async () => {
         setIsLoaded(false);
         try {
-            const res = await fetch(`${API_URL}/api/pedidos`);
+            const token = localStorage.getItem('capriccio_token_repartidor');
+            const res = await fetch(`${API_URL}/api/pedidos`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             const data = await res.json();
 
             if (Array.isArray(data)) {
@@ -143,14 +148,26 @@ const DeliveryDashboard = () => {
         const order = pedidosListos.find(p => p.id === id);
         if (!order) return;
         try {
-            await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
+            const token = localStorage.getItem('capriccio_token_repartidor');
+            const res = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ status: 'entregado' })
             });
-            setPedidosListos(prev => prev.filter(p => p.id !== id));
-            if (selectedOrder?.id === id) setIsMapOpen(false);
-        } catch (error) { console.error("Error al entregar:", error); }
+            if (res.ok) {
+                setPedidosListos(prev => prev.filter(p => p.id !== id));
+                if (selectedOrder?.id === id) setIsMapOpen(false);
+            } else {
+                const errData = await res.json();
+                alert(`Error: ${errData.error || 'No se pudo marcar como entregado'}`);
+            }
+        } catch (error) {
+            console.error("Error al entregar:", error);
+            alert("Error de conexión con el servidor. Verifica tu internet.");
+        }
     };
 
     const handleOpenMap = async (pedido: DeliveryOrder) => {
@@ -318,6 +335,23 @@ const OrderCardView = ({ pedido, isOwn, onDeliver, onMap }: { pedido: DeliveryOr
                     <p className="text-sm font-bold text-slate-800 leading-tight flex-1">{pedido.direccion}</p>
                 </div>
 
+                {/* --- DETALLE DEL PEDIDO --- */}
+                {pedido.items && pedido.items.length > 0 && (
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Contenido de la entrega</h4>
+                        <ul className="space-y-1">
+                            {pedido.items.map((item, idx) => (
+                                <li key={idx} className="flex items-center gap-2 text-sm font-bold text-slate-700 italic">
+                                    <span className="text-capriccio-gold font-black">{item.quantity}x</span> {item.nombre}
+                                    {item.extras && item.extras.length > 0 && (
+                                        <span className="text-xs text-red-500 ml-1">(+ {item.extras.map((e: any) => e.nombre).join(', ')})</span>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                     <button onClick={() => onMap(pedido)} className="flex items-center justify-center gap-3 bg-slate-950 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all">
                         <Navigation size={18} className="text-capriccio-gold" /> MAPA
@@ -335,7 +369,7 @@ const OrderCardView = ({ pedido, isOwn, onDeliver, onMap }: { pedido: DeliveryOr
                 <p className="text-base font-black text-slate-900 italic">${pedido.total}</p>
             </div>
 
-            {isOwn && (
+            {(isOwn || !pedido.repartidor || pedido.repartidor === 'S/A' || pedido.repartidor.toUpperCase() === 'NADIE') && (
                 <button
                     onClick={() => onDeliver(pedido.id)}
                     className="w-full mt-6 bg-green-500 hover:bg-green-600 text-white py-5 rounded-[1.5rem] font-black text-lg italic uppercase tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 group"

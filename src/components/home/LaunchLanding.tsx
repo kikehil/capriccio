@@ -83,7 +83,7 @@ const LaunchLanding = () => {
                     <div className="w-12 h-12 bg-red-600 rounded-2xl flex items-center justify-center rotate-12 shadow-2xl shadow-red-600/20">
                         <Flame className="text-white fill-white" size={28} />
                     </div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase">Pizza <span className="text-red-600">Cerebro</span></h2>
+                    <h2 className="text-3xl font-black italic tracking-tighter uppercase">Pizza <span className="text-capriccio-gold">Capriccio</span></h2>
                 </motion.div>
 
                 <motion.div
@@ -188,7 +188,7 @@ const LaunchLanding = () => {
             {/* Footer de Lanzamiento */}
             <footer className="relative z-10 py-10 border-t border-white/5 bg-slate-950/50 backdrop-blur-md">
                 <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-600 text-center">
-                    Veracruz, México &copy; 2026 Pizza Cerebro - Todos los derechos reservados.
+                    Veracruz, México &copy; 2026 Pizza Capriccio - Todos los derechos reservados.
                 </p>
             </footer>
         </div>
