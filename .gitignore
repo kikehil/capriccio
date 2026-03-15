@@ -55,3 +55,12 @@ public/workbox-*.js
 public/workbox-*.js.map
 public/worker-*.js
 public/worker-*.js.map
+# database and logs
+database.sqlite
+*.log
+stats_debug.log
+.agent/
+audit_tests.js
+reproduce_bug.js
+clean_server.js
+stats_debug.log

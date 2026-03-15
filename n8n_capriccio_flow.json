@@ -1,0 +1,119 @@
+{
+  "name": "🍕 Capriccio Pizzería - Webhook a WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nuevo-pedido",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "eec98c69-2169-42b7-a367-1acab1fd4a60",
+      "name": "Webhook Nuevo Pedido",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "capriccio-nuevo-pedido"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pedido = $input.all()[0].json.body;\n\n// Formateamos la lista de artículos\nlet listaArticulos = \"\";\nif (pedido.lista_articulos && Array.isArray(pedido.lista_articulos)) {\n  pedido.lista_articulos.forEach(item => {\n    listaArticulos += `▪️ ${item.cantidad}x ${item.producto} (${item.tamano})\\n`;\n    if (item.orilla_extra && item.orilla_extra !== 'Normal') {\n        listaArticulos += `   ${item.orilla_extra}\\n`;\n    }\n  });\n}\n\n// Generamos el link de Google Maps si hay coordenadas\nlet linkMapa = \"No proporcionada\";\nif (pedido.coordenadas) {\n  linkMapa = `https://maps.google.com/?q=${pedido.coordenadas.replace(' ', '')}`;\n}\n\n// Armamos el \"Ticket\" final de WhatsApp\nconst mensajeTicket = `\n🚨 *¡NUEVO PEDIDO CAPRICCIO!* 🚨\n#Orden: ${Math.floor(Math.random() * 10000)}\n\n👤 *Cliente:* ${pedido.cliente_nombre}\n📞 *Tel:* ${pedido.cliente_telefono}\n💳 *Pago:* ${pedido.metodo_pago}\n\n🛒 *DETALLE DEL PEDIDO:*\n${listaArticulos}\n💰 *TOTAL A COBRAR: $${pedido.total_pagar}*\n\n🛵 *DATOS DE ENTREGA:*\n📍 *Dirección:* ${pedido.direccion_entrega}\n🗺️ *Google Maps:* ${linkMapa}\n`;\n\nreturn [\n  {\n    json: {\n      mensaje_formateado: mensajeTicket,\n      telefono_destino: \"52\" + pedido.cliente_telefono,\n      nombre_cliente: pedido.cliente_nombre\n    }\n  }\n];"
+      },
+      "id": "2bfa5468-15ff-4da0-9bf7-53e20603f2a8",
+      "name": "Generar Ticket de WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tu-api/message/sendText/TU_INSTANCIA",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TU_API_KEY_AQUI"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"TU_NUMERO_DE_COCINA\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": {{ JSON.stringify($json.mensaje_formateado) }}\n  }\n}",
+        "options": {}
+      },
+      "id": "ae6e2f1e-ee16-46c5-8469-659f812cc117",
+      "name": "Notificación Cocina / Admin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        680,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tu-api/message/sendText/TU_INSTANCIA",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TU_API_KEY_AQUI"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.telefono_destino }}\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"¡Hola {{ $json.nombre_cliente }}! 🍕\\n\\nHemos recibido tu pedido en Capriccio Pizzería. ¡Ya lo estamos preparando para ti! 🛵💨\"\n  }\n}",
+        "options": {}
+      },
+      "id": "e27a6962-d4b9-4d6d-96ce-61266b030403",
+      "name": "Confirmación Automática al Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        680,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Nuevo Pedido": {
+      "main": [
+        [
+          {
+            "node": "Generar Ticket de WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Ticket de WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Notificación Cocina / Admin",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Confirmación Automática al Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

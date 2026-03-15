@@ -16,16 +16,35 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setError(false);
 
-        // Simulación de delay de red
-        await new Promise(resolve => setTimeout(resolve, 800));
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    username: credentials.user, 
+                    password: credentials.pass,
+                    role_request: 'admin' // Por ahora forzamos admin desde este panel
+                })
+            });
 
-        if (credentials.user === 'admin' && credentials.pass === 'pizza2026') {
-            onLogin(true);
-        } else {
+            if (res.ok) {
+                const data = await res.json();
+                localStorage.setItem('capriccio_token_admin', data.token);
+                localStorage.setItem('capriccio_user_role', data.role);
+                localStorage.setItem('capriccio_user_plan', data.plan);
+                localStorage.setItem('capriccio_negocio_nombre', data.negocio);
+                onLogin(true);
+            } else {
+                setError(true);
+                setTimeout(() => setError(false), 3000);
+            }
+        } catch (e) {
+            console.error(e);
             setError(true);
+        } finally {
             setLoading(false);
-            setTimeout(() => setError(false), 3000);
         }
     };
 

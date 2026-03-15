@@ -1,0 +1,14 @@
+Categoria,Producto,Descripcion,Precio
+Hamburguesas,Sencilla,Hamburguesa sencilla,78
+Hamburguesas,Burger,Hamburguesa clásica,90
+Hamburguesas,Mega burger,Hamburguesa grande,115
+Hamburguesas,Arrachera,Hamburguesa de arrachera,120
+Hamburguesas,De boneless,Hamburguesa con boneless,120
+Antojitos,Burritos rellenos,Orden de 3 piezas,89
+Complementos,Papas,Orden de papas fritas,48
+Complementos,Boneless,Orden de boneless,120
+Pizza,Jumbo,Pizza jumbo,315
+Promocion,2 Pizzas Medianas,Promoción lunes miércoles y viernes,245
+Promocion,2 Pizzas Grandes,Promoción lunes miércoles y viernes,275
+Extras,Orilla rellena de queso,Extra para pizza,
+Extras,Orilla dedos de queso,Extra para pizza,

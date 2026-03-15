@@ -43,7 +43,19 @@ export default function ProtectedRoute({ children, role }: ProtectedRouteProps) 
 
             if (res.ok) {
                 const data = await res.json();
+                
+                // Verificar si el plan permite este módulo
+                if ((role === 'cocina' || role === 'repartidor') && data.plan === 'basico') {
+                    setError('Tu plan actual no incluye este módulo.');
+                    setIsSubmitting(false);
+                    return;
+                }
+
                 localStorage.setItem(`capriccio_token_${role}`, data.token);
+                localStorage.setItem(`capriccio_user_plan`, data.plan);
+                localStorage.setItem(`capriccio_user_role`, data.role);
+                localStorage.setItem(`capriccio_negocio_nombre`, data.negocio || 'Admin Demo');
+                
                 // Si es repartidor, guardamos su nombre para el socket
                 if (role === 'repartidor') {
                     localStorage.setItem('capriccio_repartidor_nombre', data.nombre || username);
@@ -80,7 +92,7 @@ export default function ProtectedRoute({ children, role }: ProtectedRouteProps) 
                             type="text"
                             placeholder={role === 'repartidor' ? "TU NOMBRE (Ej: Juan)" : "USUARIO"}
                             required
-                            className="w-full bg-slate-50 p-6 rounded-2xl font-black italic uppercase outline-none border-2 border-transparent focus:border-capriccio-gold focus:bg-white transition-all text-center"
+                            className="w-full bg-slate-50 text-slate-900 p-6 rounded-2xl font-black italic outline-none border-2 border-transparent focus:border-capriccio-gold focus:bg-white transition-all text-center placeholder:text-slate-300"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                         />
@@ -88,7 +100,7 @@ export default function ProtectedRoute({ children, role }: ProtectedRouteProps) 
                             type="password"
                             placeholder="CONTRASEÑA"
                             required
-                            className="w-full bg-slate-50 p-6 rounded-2xl font-black italic outline-none border-2 border-transparent focus:border-capriccio-gold focus:bg-white transition-all text-center"
+                            className="w-full bg-slate-50 text-slate-900 p-6 rounded-2xl font-black italic outline-none border-2 border-transparent focus:border-capriccio-gold focus:bg-white transition-all text-center placeholder:text-slate-300"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                         />

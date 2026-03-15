@@ -29,15 +29,12 @@ const FloatingCart: React.FC<FloatingCartProps> = ({ cart, onOrder }) => {
 
         cart.forEach(item => {
             message += `✅ *${item.quantity}x ${item.nombre.toUpperCase()}* ($${item.totalItemPrice})%0A`;
-            if (item.extras.length > 0) {
-                item.extras.forEach(ex => {
-                    message += `   └─ ➕ _${ex.nombre}_%0A`;
-                });
-            }
+            if (item.size) message += `   ├─ 📏 Tamaño: ${item.size}%0A`;
+            if (item.crust) message += `   └─ 🧀 Orilla: ${item.crust}%0A`;
             message += `%0A`;
         });
 
-        message += `💰 *TOTAL A PAGAR: $${totalPrice}*%0A%0A---%0A_Pedido generado desde la Web de Pizza Capriccio_`;
+        message += `💰 *TOTAL A PAGAR: $${totalPrice}*%0A%0A---%0A_Pedido generado desde la Web de Capriccio_`;
 
         window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
     };
@@ -69,7 +66,7 @@ const FloatingCart: React.FC<FloatingCartProps> = ({ cart, onOrder }) => {
 
                         <button
                             onClick={handleOrder}
-                            className="bg-capriccio-gold hover:bg-capriccio-gold/90 text-capriccio-dark px-3 md:px-8 py-3 md:py-4 rounded-[1.5rem] md:rounded-[2rem] font-black italic flex items-center gap-2 md:gap-3 transition-all hover:scale-[1.02] active:scale-95 shadow-lg group flex-shrink-0"
+                            className="bg-capriccio-gold hover:bg-yellow-400 text-capriccio-dark px-3 md:px-8 py-3 md:py-4 rounded-[1.5rem] md:rounded-[2rem] font-black italic flex items-center gap-2 md:gap-3 transition-all hover:scale-[1.02] active:scale-95 shadow-[var(--shadow-neon-yellow)] group flex-shrink-0"
                         >
                             <span className="text-xs md:text-base tracking-tighter">CONFIRMAR <span className="hidden sm:inline">PEDIDO</span></span>
                             <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />

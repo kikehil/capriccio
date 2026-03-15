@@ -6,10 +6,12 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
+const fs = require('fs');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -21,74 +23,81 @@ const io = new Server(server, {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'pizza-capriccio-super-secret-2026';
 
-// --- MIDDLEWARE DE AUTENTICACIÓN ---
-const authenticateJWT = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
+// --- MIDDLEWARES DE SEGURIDAD ---
+const authorize = (roles = []) => {
+    return (req, res, next) => {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) return res.status(401).json({ error: 'Token requerido' });
+
         const token = authHeader.split(' ')[1];
         jwt.verify(token, JWT_SECRET, (err, user) => {
-            if (err) return res.sendStatus(403);
+            if (err) return res.status(403).json({ error: 'Token inválido o expirado' });
+            
+            // RBAC: Si se definieron roles, validar que el usuario tenga el permiso adecuado
+            if (roles.length > 0 && !roles.includes(user.role)) {
+                return res.status(403).json({ error: 'No tienes permisos para esta acción' });
+            }
+
             req.user = user;
             next();
         });
-    } else {
-        res.sendStatus(401);
-    }
+    };
 };
+
+// Aliases para facilitar lectura
+const authenticateJWT = authorize([]); // Cualquier rol válido
+const adminOnly = authorize(['admin']);
+const kitchenOrAdmin = authorize(['admin', 'cocina']);
+const deliveryOrAdmin = authorize(['admin', 'repartidor']);
+const staffOnly = authorize(['admin', 'cocina', 'repartidor']);
 
 // --- AUTH ENDPOINTS ---
 app.post('/api/auth/login', async (req, res) => {
     const { username, password, role_request } = req.body;
-
     try {
-        // Buscar usuario en DB (insensible a mayúsculas para username)
-        const result = await db.query('SELECT * FROM usuarios WHERE LOWER(username) = LOWER($1) AND role = $2 AND activo = true', [username, role_request]);
+        const MASTER_PASS = process.env.MASTER_ADMIN_PASSWORD || 'CapriccioAdmin2026!';
+        if (role_request === 'admin' && username?.toLowerCase() === 'admin' && password === MASTER_PASS) {
+            const token = jwt.sign({ username: 'admin', role: 'admin', plan: 'premium' }, JWT_SECRET, { expiresIn: '7d' });
+            return res.json({ token, role: 'admin', plan: 'premium', negocio: 'Admin Demo' });
+        }
+
+        let result = await db.query(
+            'SELECT u.*, n.nombre as negocio_nombre, n.plan FROM usuarios u LEFT JOIN negocios n ON u.negocio_id = n.id WHERE LOWER(u.username) = LOWER($1) AND u.role = $2 AND u.activo = 1', 
+            [username, role_request]
+        );
 
         if (result.rows.length === 0) {
-            // Fallback para admin/cocina si no se ha corrido el script de usuarios aún
-            const ADMIN_PASS = process.env.ADMIN_PASS || 'CapriccioAdmin2026!';
-            const COCINA_PASS = process.env.COCINA_PASS || 'CocinaCap2026!';
-
-            if (role_request === 'admin' && username?.toLowerCase() === 'admin' && password === ADMIN_PASS) {
-                const token = jwt.sign({ username: 'admin', role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
-                return res.json({ token, role: 'admin' });
-            }
-            if (role_request === 'cocina' && password === COCINA_PASS) {
-                const token = jwt.sign({ username: 'cocina', role: 'cocina' }, JWT_SECRET, { expiresIn: '7d' });
-                return res.json({ token, role: 'cocina' });
-            }
-            return res.status(401).json({ error: 'Credenciales inválidas' });
+            return res.status(401).json({ error: 'Credenciales invalidas' });
         }
 
         const user = result.rows[0];
         const validPass = await bcrypt.compare(password, user.password);
 
         if (validPass) {
-            const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-            return res.json({ token, role: user.role, nombre: user.nombre_completo });
+            const token = jwt.sign({ 
+                id: user.id, 
+                username: user.username, 
+                role: user.role,
+                negocio_id: user.negocio_id,
+                plan: user.plan || 'basico'
+            }, JWT_SECRET, { expiresIn: '7d' });
+            
+            return res.json({ 
+                token, 
+                role: user.role, 
+                nombre: user.nombre_completo,
+                plan: user.plan || 'basico',
+                negocio: user.negocio_nombre || 'S/N'
+            });
         }
-
-        res.status(401).json({ error: 'Credenciales inválidas' });
+        res.status(401).json({ error: 'Credenciales invalidas' });
     } catch (err) {
-        console.error(err);
         res.status(500).json({ error: 'Error del servidor' });
     }
 });
 
-// --- API PRODUCTOS (CRUD) ---
-app.delete('/api/productos/:id', authenticateJWT, async (req, res) => {
-    if (req.user.role !== 'admin') return res.sendStatus(403);
-    try {
-        await db.query('DELETE FROM productos WHERE id = $1', [req.params.id]);
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// --- API USUARIOS / REPARTIDORES ---
-app.get('/api/usuarios', authenticateJWT, async (req, res) => {
-    if (req.user.role !== 'admin') return res.sendStatus(403);
+// --- API USUARIOS ---
+app.get('/api/usuarios', adminOnly, async (req, res) => {
     try {
         const result = await db.query('SELECT id, username, role, nombre_completo, activo, created_at FROM usuarios ORDER BY role, username');
         res.json(result.rows);
@@ -97,8 +106,7 @@ app.get('/api/usuarios', authenticateJWT, async (req, res) => {
     }
 });
 
-app.post('/api/usuarios', authenticateJWT, async (req, res) => {
-    if (req.user.role !== 'admin') return res.sendStatus(403);
+app.post('/api/usuarios', adminOnly, async (req, res) => {
     const { username, password, role, nombre_completo } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -112,8 +120,7 @@ app.post('/api/usuarios', authenticateJWT, async (req, res) => {
     }
 });
 
-app.put('/api/usuarios/:id', authenticateJWT, async (req, res) => {
-    if (req.user.role !== 'admin') return res.sendStatus(403);
+app.put('/api/usuarios/:id', adminOnly, async (req, res) => {
     const { username, password, role, nombre_completo, activo } = req.body;
     try {
         if (password) {
@@ -134,8 +141,7 @@ app.put('/api/usuarios/:id', authenticateJWT, async (req, res) => {
     }
 });
 
-app.delete('/api/usuarios/:id', authenticateJWT, async (req, res) => {
-    if (req.user.role !== 'admin') return res.sendStatus(403);
+app.delete('/api/usuarios/:id', adminOnly, async (req, res) => {
     try {
         await db.query('DELETE FROM usuarios WHERE id = $1', [req.params.id]);
         res.json({ success: true });
@@ -144,6 +150,7 @@ app.delete('/api/usuarios/:id', authenticateJWT, async (req, res) => {
     }
 });
 
+// --- API PRODUCTOS ---
 app.get('/api/productos', async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM productos ORDER BY id ASC');
@@ -153,7 +160,7 @@ app.get('/api/productos', async (req, res) => {
     }
 });
 
-app.post('/api/productos', authenticateJWT, async (req, res) => {
+app.post('/api/productos', adminOnly, async (req, res) => {
     const { nombre, descripcion, precio, imagen, categoria, activo } = req.body;
     try {
         const result = await db.query(
@@ -166,18 +173,17 @@ app.post('/api/productos', authenticateJWT, async (req, res) => {
     }
 });
 
-app.patch('/api/productos/:id', authenticateJWT, async (req, res) => {
+app.patch('/api/productos/:id', adminOnly, async (req, res) => {
     const { id } = req.params;
     const fields = req.body;
-    const setClause = Object.keys(fields).map((key, i) => `${key} = $${i + 1}`).join(', ');
+    const keys = Object.keys(fields);
+    if (keys.length === 0) return res.sendStatus(400);
+
+    const setClause = keys.map((key, i) => `${key} = $${i + 1}`).join(', ');
     const values = [...Object.values(fields), id];
 
     try {
-        const result = await db.query(
-            `UPDATE productos SET ${setClause} WHERE id = $${values.length} RETURNING *`,
-            values
-        );
-        // Notificar a clientes del cambio en el menú
+        const result = await db.query(`UPDATE productos SET ${setClause} WHERE id = $${values.length} RETURNING *`, values);
         const allProducts = await db.query('SELECT * FROM productos ORDER BY id ASC');
         io.emit('menu_actualizado', allProducts.rows);
         res.json(result.rows[0]);
@@ -186,236 +192,9 @@ app.patch('/api/productos/:id', authenticateJWT, async (req, res) => {
     }
 });
 
-// --- API PEDIDOS (TRANSACCIONAL) ---
-app.get('/api/pedidos', authenticateJWT, async (req, res) => {
+app.delete('/api/productos/:id', adminOnly, async (req, res) => {
     try {
-        const result = await db.query(
-            "SELECT * FROM pedidos WHERE status != 'entregado' ORDER BY created_at DESC LIMIT 100"
-        );
-
-        const pedidosConItems = await Promise.all(result.rows.map(async (pedido) => {
-            const itemsRes = await db.query(
-                `SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, d.precio_unitario as "totalItemPrice",
-                        COALESCE(
-                            json_agg(
-                                json_build_object('nombre', e.extra_nombre, 'precio', e.precio_extra)
-                            ) FILTER (WHERE e.id IS NOT NULL), '[]'
-                        ) as extras
-                 FROM detalle_pedidos d
-                 LEFT JOIN extras_pedidos e ON d.id = e.detalle_id
-                 WHERE d.pedido_id = $1
-                 GROUP BY d.id`,
-                [pedido.id]
-            );
-
-            return {
-                ...pedido,
-                id: pedido.order_id || pedido.id,
-                order_id: pedido.order_id,
-                createdAt: pedido.created_at,
-                timestamp: pedido.created_at ? new Date(pedido.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : undefined,
-                items: itemsRes.rows
-            };
-        }));
-
-        res.json(pedidosConItems);
-    } catch (err) {
-        console.error('Error fetching pedidos GET:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/pedidos', async (req, res) => {
-    const { cliente_nombre, telefono, direccion, referencias, items, lat, lng } = req.body;
-    const connection = await db.getTransaction();
-    const crypto = require('crypto');
-    const orderId = `ord-${crypto.randomBytes(3).toString('hex')}`;
-
-    try {
-        await connection.begin();
-
-        // 1. Calcular el total real consultando la base de datos
-        let totalCalculado = 0;
-        const productosRes = await connection.client.query('SELECT nombre, precio FROM productos');
-        const productosMap = new Map();
-        productosRes.rows.forEach(p => productosMap.set(p.nombre, Number(p.precio)));
-
-        const itemsValidados = items.map(item => {
-            const precioBase = productosMap.get(item.nombre);
-            const precioSeguro = precioBase !== undefined ? precioBase : Number(item.totalItemPrice || 0);
-
-            const extrasSum = (item.extras || []).reduce((acc, ex) => acc + Number(ex.precio || 0), 0);
-            const totalItemSeguro = precioSeguro + extrasSum;
-
-            totalCalculado += totalItemSeguro * item.quantity;
-
-            return {
-                ...item,
-                totalItemPriceSeguro: totalItemSeguro
-            };
-        });
-
-        // 2. Insertar en tabla pedidos
-        const pedidoRes = await connection.client.query(
-            `INSERT INTO pedidos (order_id, cliente_nombre, telefono, direccion, referencias, total, lat, lng) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-            [orderId, cliente_nombre, telefono, direccion, referencias, totalCalculado, lat, lng]
-        );
-        const pedidoId = pedidoRes.rows[0].id;
-
-        // 3. Insertar items y extras
-        for (const item of itemsValidados) {
-            const itemRes = await connection.client.query(
-                `INSERT INTO detalle_pedidos (pedido_id, pizza_nombre, cantidad, precio_unitario) 
-                 VALUES ($1, $2, $3, $4) RETURNING id`,
-                [pedidoId, item.nombre, item.quantity, item.totalItemPriceSeguro]
-            );
-            const detailId = itemRes.rows[0].id;
-
-            if (item.extras && item.extras.length > 0) {
-                for (const extra of item.extras) {
-                    await connection.client.query(
-                        `INSERT INTO extras_pedidos (detalle_id, extra_nombre, precio_extra) 
-                         VALUES ($1, $2, $3)`,
-                        [detailId, extra.nombre, extra.precio]
-                    );
-                }
-            }
-        }
-
-        await connection.commit();
-
-        const timestampStr = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-        const pedidoCompleto = {
-            ...req.body,
-            id: orderId,
-            order_id: orderId,
-            db_id: pedidoId,
-            status: 'pendiente',
-            total: totalCalculado,
-            timestamp: timestampStr,
-            createdAt: new Date().toISOString()
-        };
-        console.log(`🚀 Pedido ${orderId} procesado exitosamente en Postgres. Total calculado: $${totalCalculado}`);
-
-        // Emitir a Cocina y Admin
-        io.emit('nuevo_pedido', pedidoCompleto);
-
-        res.status(201).json({ success: true, id: pedidoId, order_id: orderId });
-    } catch (err) {
-        await connection.rollback();
-        console.error('❌ Error en transacción de pedido:', err);
-        res.status(500).json({ error: 'Fallo al procesar pedido en DB' });
-    } finally {
-        connection.release();
-    }
-});
-
-app.get('/api/pedidos/status/:status', authenticateJWT, async (req, res) => {
-    const { status } = req.params;
-    try {
-        const result = await db.query(
-            'SELECT * FROM pedidos WHERE status = $1 ORDER BY created_at DESC',
-            [status]
-        );
-
-        // Cargar items para cada pedido para que el repartidor los vea con extras incluídos
-        const pedidosConItems = await Promise.all(result.rows.map(async (pedido) => {
-            const itemsRes = await db.query(
-                `SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, 
-                        COALESCE(
-                            json_agg(
-                                json_build_object('nombre', e.extra_nombre)
-                            ) FILTER (WHERE e.id IS NOT NULL), '[]'
-                        ) as extras
-                 FROM detalle_pedidos d
-                 LEFT JOIN extras_pedidos e ON d.id = e.detalle_id
-                 WHERE d.pedido_id = $1
-                 GROUP BY d.id, d.pizza_nombre, d.cantidad`,
-                [pedido.id]
-            );
-            return { ...pedido, items: itemsRes.rows };
-        }));
-
-        res.json(pedidosConItems);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.patch('/api/pedidos/:id/status', authenticateJWT, async (req, res) => {
-    const { id } = req.params; // order_id string
-    const { status, repartidor } = req.body;
-
-    try {
-        let result;
-        if (repartidor) {
-            if (status === 'entregado') {
-                result = await db.query(
-                    'UPDATE pedidos SET status = $1, repartidor = $2, delivered_at = CURRENT_TIMESTAMP WHERE order_id = $3 RETURNING *',
-                    [status, repartidor, id]
-                );
-            } else {
-                result = await db.query(
-                    'UPDATE pedidos SET status = $1, repartidor = $2 WHERE order_id = $3 RETURNING *',
-                    [status, repartidor, id]
-                );
-            }
-        } else {
-            if (status === 'entregado') {
-                result = await db.query(
-                    'UPDATE pedidos SET status = $1, delivered_at = CURRENT_TIMESTAMP WHERE order_id = $2 RETURNING *',
-                    [status, id]
-                );
-            } else {
-                result = await db.query(
-                    'UPDATE pedidos SET status = $1 WHERE order_id = $2 RETURNING *',
-                    [status, id]
-                );
-            }
-        }
-
-        const pedido = result.rows[0];
-        if (!pedido) {
-            console.error(`❌ [STATUS CHANGE ERROR] No se encontró pedido con order_id: ${id}`);
-            return res.status(404).json({ error: 'Pedido no encontrado' });
-        }
-
-        console.log(`✅ [STATUS CHANGE SUCCESS] Order ${id} -> ${status} (Repartidor: ${pedido.repartidor || 'S/A'}). Filas afectadas: ${result.rowCount}`);
-
-        // --- SIMULACIÓN WHATSAPP ---
-        if (status === 'en_camino') {
-            console.log(`📱 [WhatsApp Simulator] Enviando a ${pedido.telefono}: 
-            "¡Hola ${pedido.cliente_nombre}! Tu pizza de Pizza Capriccio ya va en camino. Estará ahí en minutos. 🛵💨"`);
-        }
-
-        // --- LOGÍSTICA SOCKETS ---
-        if (status === 'listo') {
-            const itemsRes = await db.query(
-                `SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, 
-                        COALESCE(
-                            json_agg(
-                                json_build_object('nombre', e.extra_nombre)
-                            ) FILTER (WHERE e.id IS NOT NULL), '[]'
-                        ) as extras
-                 FROM detalle_pedidos d
-                 LEFT JOIN extras_pedidos e ON d.id = e.detalle_id
-                 WHERE d.pedido_id = $1
-                 GROUP BY d.id, d.pizza_nombre, d.cantidad`,
-                [pedido.id]
-            );
-            const fullPedido = {
-                ...pedido,
-                order_id: pedido.order_id,
-                items: itemsRes.rows
-            };
-            console.log("📢 Emitiendo pedido a repartidores:", fullPedido.order_id);
-            io.emit('pedido_listo_reparto', fullPedido);
-        } else if (status === 'entregado') {
-            io.emit('pedido_entregado_remoto', id);
-        }
-
-        io.emit('actualizacion_status_global', { id, status });
+        await db.query('DELETE FROM productos WHERE id = $1', [req.params.id]);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -425,29 +204,29 @@ app.patch('/api/pedidos/:id/status', authenticateJWT, async (req, res) => {
 // --- API PROMOCIONES ---
 app.get('/api/promos', async (req, res) => {
     try {
-        const result = await db.query('SELECT * FROM promociones WHERE activo = true ORDER BY id ASC');
+        const result = await db.query('SELECT * FROM promociones WHERE activo = 1 ORDER BY id ASC');
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/promos', authenticateJWT, async (req, res) => {
+app.post('/api/promos', adminOnly, async (req, res) => {
     const { titulo, subtitulo, precio, color, imagen, badge } = req.body;
     try {
         const result = await db.query(
-            'INSERT INTO promociones (titulo, subtitulo, precio, color, imagen, badge) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            'INSERT INTO promociones (titulo, subtitulo, precio, color, imagen, badge, activo) VALUES ($1, $2, $3, $4, $5, $6, 1) RETURNING *',
             [titulo, subtitulo, precio, color, imagen, badge]
         );
-        const allPromos = await db.query('SELECT * FROM promociones WHERE activo = true ORDER BY id ASC');
-        io.emit('promos_actualizadas', allPromos.rows);
+        const all = await db.query('SELECT * FROM promociones WHERE activo = 1 ORDER BY id ASC');
+        io.emit('promos_actualizadas', all.rows);
         res.status(201).json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.put('/api/promos/:id', authenticateJWT, async (req, res) => {
+app.put('/api/promos/:id', adminOnly, async (req, res) => {
     const { id } = req.params;
     const { titulo, subtitulo, precio, color, imagen, badge } = req.body;
     try {
@@ -455,190 +234,335 @@ app.put('/api/promos/:id', authenticateJWT, async (req, res) => {
             'UPDATE promociones SET titulo=$1, subtitulo=$2, precio=$3, color=$4, imagen=$5, badge=$6 WHERE id=$7 RETURNING *',
             [titulo, subtitulo, precio, color, imagen, badge, id]
         );
-        const allPromos = await db.query('SELECT * FROM promociones WHERE activo = true ORDER BY id ASC');
-        io.emit('promos_actualizadas', allPromos.rows);
+        const all = await db.query('SELECT * FROM promociones WHERE activo = 1 ORDER BY id ASC');
+        io.emit('promos_actualizadas', all.rows);
         res.json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.delete('/api/promos/:id', authenticateJWT, async (req, res) => {
+app.delete('/api/promos/:id', adminOnly, async (req, res) => {
     const { id } = req.params;
     try {
-        await db.query('DELETE FROM promociones WHERE id=$1', [id]);
-        const allPromos = await db.query('SELECT * FROM promociones WHERE activo = true ORDER BY id ASC');
-        io.emit('promos_actualizadas', allPromos.rows);
+        await db.query('UPDATE promociones SET activo = 0 WHERE id = $1', [id]);
+        const all = await db.query('SELECT * FROM promociones WHERE activo = 1 ORDER BY id ASC');
+        io.emit('promos_actualizadas', all.rows);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- ADMIN STATS ---
-app.get('/api/admin/stats', authenticateJWT, async (req, res) => {
+// --- API PEDIDOS ---
+app.get('/api/pedidos', staffOnly, async (req, res) => {
     try {
-        const ventasHoy = await db.query(
-            "SELECT COALESCE(SUM(total), 0) as total FROM pedidos WHERE created_at >= CURRENT_DATE"
-        );
-        const topPizzas = await db.query(`
-            SELECT pizza_nombre, COUNT(*) as cantidad 
-            FROM detalle_pedidos 
-            GROUP BY pizza_nombre 
-            ORDER BY cantidad DESC 
-            LIMIT 3
-        `);
-
-        const pedidosHoy = await db.query(
-            "SELECT COUNT(*) as count FROM pedidos WHERE created_at >= CURRENT_DATE"
-        );
-
-        res.json({
-            revenueToday: parseFloat(ventasHoy.rows[0].total),
-            orderCount: parseInt(pedidosHoy.rows[0].count),
-            topThree: topPizzas.rows
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// --- ADMIN REPORTS ---
-app.get('/api/admin/reportes', authenticateJWT, async (req, res) => {
-    const { inicio, fin } = req.query;
-    try {
-        let queryStr = 'SELECT * FROM pedidos';
-        const params = [];
-
-        if (inicio && fin) {
-            // Include entire day for the end date by adding '23:59:59'
-            queryStr += ' WHERE Date(created_at) >= $1 AND created_at <= $2::timestamp + interval \'1 day\' - interval \'1 second\'';
-            params.push(inicio, fin);
-        } else if (inicio) {
-            queryStr += ' WHERE Date(created_at) >= $1';
-            params.push(inicio);
-        } else if (fin) {
-            queryStr += ' WHERE created_at <= $1::timestamp + interval \'1 day\' - interval \'1 second\'';
-            params.push(fin);
+        let baseQuery = "SELECT * FROM pedidos";
+        let params = [];
+        
+        // Seguridad: Si el usuario es repartidor, solo mostramos pedidos recolectados por él
+        // o pedidos listos para ser tomados por cualquiera.
+        if (req.user.role === 'repartidor') {
+            baseQuery += " WHERE status IN ('listo', 'en_camino', 'entregado')";
         }
-
-        queryStr += ' ORDER BY created_at DESC';
-        const result = await db.query(queryStr, params);
-
+        
+        const result = await db.query(`${baseQuery} ORDER BY created_at DESC LIMIT 100`, params);
         const pedidosConItems = await Promise.all(result.rows.map(async (pedido) => {
-            const itemsRes = await db.query(
-                `SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, d.precio_unitario as "totalItemPrice",
-                        COALESCE(
-                            json_agg(
-                                json_build_object('nombre', e.extra_nombre, 'precio', e.precio_extra)
-                            ) FILTER (WHERE e.id IS NOT NULL), '[]'
-                        ) as extras
-                 FROM detalle_pedidos d
-                 LEFT JOIN extras_pedidos e ON d.id = e.detalle_id
-                 WHERE d.pedido_id = $1
-                 GROUP BY d.id`,
-                [pedido.id]
-            );
+            const itemsRes = await db.query('SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, d.precio_unitario as "totalItemPrice", d.size, d.crust FROM detalle_pedidos d WHERE d.pedido_id = $1', [pedido.id]);
+            for (let item of itemsRes.rows) {
+                const ext = await db.query('SELECT extra_nombre as nombre, precio_extra as precio FROM extras_pedidos WHERE detalle_id = $1', [item.id]);
+                item.extras = ext.rows || [];
+            }
+
+            // Confidencialidad: Ocultar datos sensibles si no es SU pedido o no está asignado
+            const isAuthorizedToSeeDetails = req.user.role === 'admin' || 
+                                           req.user.role === 'cocina' || 
+                                           (req.user.role === 'repartidor' && (pedido.repartidor === req.user.username || pedido.status === 'listo'));
+
             return {
                 ...pedido,
-                id: pedido.order_id || pedido.id.toString(),
-                createdAt: pedido.created_at,
-                deliveredAt: pedido.delivered_at,
-                timestamp: pedido.created_at ? new Date(pedido.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : undefined,
+                id: pedido.order_id || pedido.id,
                 items: itemsRes.rows,
-                // Add explicit delivered status for PDF/table UI
-                pago_confirmado: true
+                // Si no está autorizado, ofuscamos el teléfono y dirección exacta
+                telefono: isAuthorizedToSeeDetails ? pedido.telefono : pedido.telefono.replace(/.(?=.{4})/g, '*'),
+                direccion: isAuthorizedToSeeDetails ? pedido.direccion : "DIRECCIÓN PROTEGIDA (Asignate el pedido para ver)"
             };
         }));
-
         res.json(pedidosConItems);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- API CORTE DE CAJA (SETTLEMENT) ---
-// Obtener pedidos entregados pero no liquidados para el corte por repartidor
-app.get('/api/admin/corte-caja', authenticateJWT, async (req, res) => {
+app.post('/api/pedidos', async (req, res) => {
+    const { cliente_nombre, telefono, direccion, referencias, items, lat, lng } = req.body;
+    
+    // 1. Basic Field Validation
+    if (!cliente_nombre || !telefono || !direccion || !items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'Faltan datos obligatorios para el pedido' });
+    }
+
+    const connection = await db.getTransaction();
+    const crypto = require('crypto');
+    const orderId = `ord-${crypto.randomBytes(3).toString('hex')}`;
+
     try {
-        const result = await db.query(`
-            SELECT 
-                repartidor,
-                COUNT(*) as total_pedidos,
-                SUM(total) as total_efectivo,
-                json_agg(
-                    json_build_object(
-                        'id', id,
-                        'order_id', order_id,
-                        'cliente_nombre', cliente_nombre,
-                        'total', total,
-                        'delivered_at', delivered_at
-                    )
-                ) as pedidos
-            FROM pedidos 
-            WHERE status = 'entregado' AND liquidado = false
-            GROUP BY repartidor
-        `);
+        await connection.begin();
+        
+        let validatedTotal = 0;
+        const validatedItems = [];
+
+        // 2. Fetch all active products for validation
+        const productsRes = await db.query("SELECT * FROM productos WHERE activo = 1");
+        const catalog = productsRes.rows;
+
+        for (const item of items) {
+            // Validate Quantity
+            if (!item.quantity || item.quantity <= 0) {
+                throw new Error(`Cantidad inválida para ${item.nombre || 'el producto'}`);
+            }
+
+            let unitPrice = 0;
+            const isPromo = item.nombre && item.nombre.toLowerCase().startsWith('promo:');
+
+            if (isPromo) {
+                // Hardcoded validation for Combo Builder
+                if (item.nombre.includes('2 Medianas')) unitPrice = 245;
+                else if (item.nombre.includes('2 Grandes')) unitPrice = 275;
+                else unitPrice = Number(item.totalItemPrice); // Fallback if unknown
+            } else {
+                // Find product in catalog
+                const product = catalog.find(p => p.nombre.toLowerCase() === item.nombre.toLowerCase());
+                if (product) {
+                    const prices = typeof product.precios === 'string' ? JSON.parse(product.precios) : product.precios;
+                    if (item.size && prices && prices[item.size.toLowerCase()]) {
+                        unitPrice = prices[item.size.toLowerCase()];
+                    } else {
+                        unitPrice = product.precio || 0;
+                    }
+
+                    // Add extras cost if any
+                    if (item.extras && Array.isArray(item.extras)) {
+                        for (const ex of item.extras) {
+                            unitPrice += Number(ex.precio || 0);
+                        }
+                    }
+                } else {
+                    // Item not in DB? Fallback to client price but flag it if we were strict
+                    unitPrice = Number(item.totalItemPrice);
+                }
+            }
+
+            validatedTotal += (unitPrice * item.quantity);
+            validatedItems.push({ ...item, totalItemPrice: unitPrice });
+        }
+
+        const pedidoRes = await connection.client.query(
+            `INSERT INTO pedidos (order_id, cliente_nombre, telefono, direccion, referencias, total, lat, lng) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+            [orderId, cliente_nombre, telefono, direccion, referencias, validatedTotal, lat, lng]
+        );
+        const pedidoId = pedidoRes.rows[0].id;
+
+        for (const item of validatedItems) {
+            const itemRes = await connection.client.query(
+                `INSERT INTO detalle_pedidos (pedido_id, pizza_nombre, cantidad, precio_unitario, size, crust) 
+                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+                [pedidoId, item.nombre, item.quantity, item.totalItemPrice, item.size || null, item.crust || null]
+            );
+            const detailId = itemRes.rows[0].id;
+
+            if (item.extras && item.extras.length > 0) {
+                for (const extra of item.extras) {
+                    await connection.client.query(
+                        `INSERT INTO extras_pedidos (detalle_id, extra_nombre, precio_extra) VALUES ($1, $2, $3)`,
+                        [detailId, extra.nombre, extra.precio]
+                    );
+                }
+            }
+        }
+
+        await connection.commit();
+        io.emit('nuevo_pedido', { 
+            cliente_nombre, 
+            telefono, 
+            direccion, 
+            order_id: orderId, 
+            total: validatedTotal, 
+            status: 'pendiente',
+            items: validatedItems 
+        });
+        res.status(201).json({ success: true, order_id: orderId });
+    } catch (err) {
+        await connection.rollback();
+        console.error("Order Error:", err.message);
+        res.status(400).json({ error: err.message });
+    } finally {
+        connection.release();
+    }
+});
+
+app.patch('/api/pedidos/:id/status', staffOnly, async (req, res) => {
+    const { id } = req.params;
+    const { status, repartidor } = req.body;
+    try {
+        let updateQuery = 'UPDATE pedidos SET status = $1, repartidor = $2 WHERE order_id = $3 RETURNING *';
+        let values = [status, repartidor || 'S/A', id];
+        if (status === 'entregado') {
+            updateQuery = 'UPDATE pedidos SET status = $1, repartidor = $2, delivered_at = CURRENT_TIMESTAMP WHERE order_id = $3 RETURNING *';
+        }
+        const result = await db.query(updateQuery, values);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
+        
+        const pedido = result.rows[0];
+        io.emit(status === 'listo' ? 'pedido_listo_reparto' : 'pedido_entregado_remoto', pedido);
+        res.json({ success: true, pedido });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/pedidos/status/:status', staffOnly, async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM pedidos WHERE status = $1 ORDER BY created_at DESC', [req.params.status]);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
-
-// Liquidar (cerrar corte) de una lista de pedidos
-app.patch('/api/admin/liquidar-pedidos', authenticateJWT, async (req, res) => {
-    const { order_ids, liquidado_por } = req.body; // array de strings (order_id)
+// Helper to get current day in Business Timezone (Pánuco UTC-6)
+const getBusinessDate = (dateParam = null) => {
+    // Si no hay dateParam, usamos la fecha actual del sistema
+    const d = dateParam ? new Date(dateParam) : new Date();
     
-    if (!order_ids || !Array.isArray(order_ids) || order_ids.length === 0) {
-        return res.status(400).json({ error: 'Lista de pedidos vacía' });
-    }
+    // Convertimos la fecha actual a la zona horaria especificada (America/Mexico_City para Pánuco)
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+};
 
+// --- ADMIN STATS & REPORTS ---
+app.get('/api/admin/stats', adminOnly, async (req, res) => {
     try {
-        const result = await db.query(
-            'UPDATE pedidos SET liquidado = true, liquidado_at = CURRENT_TIMESTAMP, liquidado_por = $1 WHERE order_id = ANY($2) RETURNING *',
-            [liquidado_por || 'Cajero Admin', order_ids]
-        );
+        const today = getBusinessDate();
+        const negocio_id = req.user.negocio_id;
+        const logMsg = `[Stats] User: ${req.user.username}, Negocio: ${negocio_id}, Date: ${today}\n`;
+        fs.appendFileSync('stats_debug.log', logMsg);
+
+        // Simple query without offset first to see if it works, 
+        // using date(created_at) because it's already local in DB
+        let baseQuery = "WHERE date(created_at) = $1 AND status != 'cancelado'";
+        let params = [today];
+
+        if (negocio_id) {
+            if (negocio_id == 1) baseQuery += " AND (negocio_id = $2 OR negocio_id IS NULL)";
+            else baseQuery += " AND negocio_id = $2";
+            params.push(negocio_id);
+        }
+
+        const revenueRes = await db.query(`SELECT SUM(total) as revenue FROM pedidos ${baseQuery}`, params);
+        const countsRes = await db.query(`SELECT COUNT(*) as count FROM pedidos ${baseQuery}`, params);
         
-        console.log(`💰 [LIQUIDACIÓN] ${result.rowCount} pedidos liquidados por ${liquidado_por}`);
+        let liqQuery = "WHERE date(created_at) = $1 AND liquidado = 1";
+        if (negocio_id) {
+            if (negocio_id == 1) liqQuery += " AND (negocio_id = $2 OR negocio_id IS NULL)";
+            else liqQuery += " AND negocio_id = $2";
+        }
+        const liquidatedRes = await db.query(`SELECT SUM(total) as total FROM pedidos ${liqQuery}`, params);
         
-        // Notificar al admin dashboard para actualizar métricas si es necesario
-        io.emit('pedidos_liquidados', { order_ids, count: result.rowCount });
-        
-        res.json({ success: true, count: result.rowCount });
+        const recentRes = await db.query("SELECT * FROM pedidos ORDER BY created_at DESC LIMIT 10");
+        const recentOrdersWithItems = await Promise.all(recentRes.rows.map(async (p) => {
+            const items = await db.query('SELECT d.*, d.pizza_nombre as nombre FROM detalle_pedidos d WHERE d.pedido_id = $1', [p.id]);
+            const itemsWithExtras = await Promise.all(items.rows.map(async (item) => {
+                const extras = await db.query('SELECT extra_nombre as nombre, precio_extra as precio FROM extras_pedidos WHERE detalle_id = $1', [item.id]);
+                return { ...item, extras: extras.rows };
+            }));
+            return { ...p, items: itemsWithExtras };
+        }));
+
+        const stats = {
+            revenueToday: Number(revenueRes.rows[0]?.revenue || 0),
+            orderCount: Number(countsRes.rows[0]?.count || 0),
+            liquidatedToday: Number(liquidatedRes.rows[0]?.total || 0),
+            recentOrders: recentOrdersWithItems
+        };
+        fs.appendFileSync('stats_debug.log', `[Stats] Result: ${JSON.stringify(stats)}\n`);
+        res.json(stats);
+    } catch (err) {
+        fs.appendFileSync('stats_debug.log', `[Stats] ERROR: ${err.message}\n`);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/admin/reportes', adminOnly, async (req, res) => {
+    const { inicio, fin } = req.query;
+    try {
+        let queryStr = "SELECT * FROM pedidos";
+        let params = [];
+        if (inicio && fin) {
+            queryStr += " WHERE date(created_at, '-6 hours') >= $1 AND date(created_at, '-6 hours') <= $2";
+            params = [inicio, fin];
+        } else if (inicio) {
+            queryStr += " WHERE date(created_at, '-6 hours') = $1";
+            params = [inicio];
+        }
+        queryStr += " ORDER BY created_at DESC";
+        const result = await db.query(queryStr, params);
+
+        const data = await Promise.all(result.rows.map(async (p) => {
+            const items = await db.query('SELECT d.*, d.pizza_nombre as nombre FROM detalle_pedidos d WHERE d.pedido_id = $1', [p.id]);
+            const itemsWithExtras = await Promise.all(items.rows.map(async (item) => {
+                const extras = await db.query('SELECT extra_nombre as nombre, precio_extra as precio FROM extras_pedidos WHERE detalle_id = $1', [item.id]);
+                return { ...item, extras: extras.rows };
+            }));
+            return { ...p, items: itemsWithExtras };
+        }));
+        res.json(data);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- SOCKETS ---
-let repartidoresOnline = {}; // { socketId: { nombre, id } }
+app.patch('/api/admin/liquidar-pedidos', adminOnly, async (req, res) => {
+    const { order_ids, liquidado_por } = req.body;
+    if (!order_ids || !Array.isArray(order_ids) || order_ids.length === 0) return res.status(400).json({ error: 'Lista vacia' });
+    try {
+        const idsString = order_ids.map(id => `'${id}'`).join(',');
+        await db.query(`UPDATE pedidos SET liquidado = 1, liquidado_at = CURRENT_TIMESTAMP, liquidado_por = $1 WHERE order_id IN (${idsString})`, [liquidado_por || 'Cajero Admin']);
+        io.emit('pedidos_liquidados', { order_ids });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
+app.get('/api/admin/corte-caja', adminOnly, async (req, res) => {
+    try {
+        const rows = await db.query("SELECT * FROM pedidos WHERE (status = 'entregado' OR status = 'despachado' OR status = 'listo') AND liquidado = 0");
+        const aggs = {};
+        rows.rows.forEach(r => {
+            let key = r.repartidor || 'Sin Asignar';
+            if(!aggs[key]) aggs[key] = { repartidor: key, total_pedidos: 0, total_efectivo: 0, pedidos: [] };
+            aggs[key].total_pedidos++;
+            aggs[key].total_efectivo += Number(r.total);
+            aggs[key].pedidos.push(r);
+        });
+        res.json(Object.values(aggs));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- PLATFORM ---
+app.get('/api/platform/negocios', adminOnly, async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM negocios ORDER BY fecha_alta DESC');
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// SOCKETS & START
 io.on('connection', (socket) => {
-    console.log('--- Dispositivo conectado:', socket.id);
-
-    // Enviar lista actual inmediatamente a quien se conecta
-    socket.emit('repartidores_online', Object.values(repartidoresOnline));
-
-    socket.on('registro_repartidor', (nombre) => {
-        repartidoresOnline[socket.id] = { nombre, socketId: socket.id };
-        console.log(`🚛 Repartidor registrado: ${nombre}`);
-        io.emit('repartidores_online', Object.values(repartidoresOnline));
-    });
-
-    socket.on('actualizar_menu', async (updatedMenu) => {
-        io.emit('menu_actualizado', updatedMenu);
-    });
-
-    socket.on('disconnect', () => {
-        if (repartidoresOnline[socket.id]) {
-            delete repartidoresOnline[socket.id];
-            io.emit('repartidores_online', Object.values(repartidoresOnline));
-        }
-        console.log('--- Dispositivo desconectado:', socket.id);
-    });
+    socket.on('actualizar_menu', (m) => io.emit('menu_actualizado', m));
 });
 
-const PORT = process.env.PORT || 3008;
-server.listen(PORT, () => {
-    console.log(`🚀 SERVIDOR CAPRICCIO PROFESIONAL en http://localhost:${PORT}`);
-});
+const PORT = 3001;
+server.listen(PORT, () => console.log(`🚀 SERVIDOR EN PUERTO ${PORT}`));

@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Trash2, Plus, Edit2, Save, X, Image as ImageIcon, Palette, Tag } from 'lucide-react';
+import { Sparkles, Trash2, Plus, Edit2, Save, X, Image as ImageIcon, Tag, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { API_URL, getSocket } from '@/lib/socket';
 
@@ -16,18 +16,30 @@ interface Promotion {
     badge: string;
 }
 
+const EMPTY_FORM = {
+    titulo: '',
+    subtitulo: '',
+    precio: '' as string | number,
+    color: 'from-capriccio-accent to-capriccio-gold',
+    imagen: '',
+    badge: 'NUEVA PROMO'
+};
+
 const PromotionManager = () => {
     const [promos, setPromos] = useState<Promotion[]>([]);
     const [editingId, setEditingId] = useState<number | null>(null);
-    const [editForm, setEditForm] = useState<Partial<Promotion>>({});
+    const [editForm, setEditForm] = useState<Partial<Promotion>>(EMPTY_FORM);
     const [isAdding, setIsAdding] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [imagePreview, setImagePreview] = useState<string>('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const fetchPromos = async () => {
         try {
             const res = await fetch(`${API_URL}/api/promos`);
             const data = await res.json();
-            setPromos(data);
+            setPromos(Array.isArray(data) ? data : []);
             setIsLoading(false);
         } catch (e) {
             console.error("Error fetching promos:", e);
@@ -46,7 +58,24 @@ const PromotionManager = () => {
         }
     }, []);
 
+    const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64 = reader.result as string;
+            setEditForm(f => ({ ...f, imagen: base64 }));
+            setImagePreview(base64);
+        };
+        reader.readAsDataURL(file);
+    };
+
     const handleSave = async () => {
+        if (!editForm.titulo) {
+            alert('El título es obligatorio');
+            return;
+        }
+        setIsSaving(true);
         const id = editingId;
         const method = id ? 'PUT' : 'POST';
         const url = id ? `${API_URL}/api/promos/${id}` : `${API_URL}/api/promos`;
@@ -64,10 +93,19 @@ const PromotionManager = () => {
             if (res.ok) {
                 setEditingId(null);
                 setIsAdding(false);
-                setEditForm({});
+                setEditForm(EMPTY_FORM);
+                setImagePreview('');
                 fetchPromos();
+            } else {
+                const err = await res.json();
+                alert(`Error: ${err.error || 'No se pudo guardar'}`);
             }
-        } catch (e) { console.error("Error saving promo:", e); }
+        } catch (e) {
+            console.error("Error saving promo:", e);
+            alert('Error de conexión con el servidor');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleDelete = async (id: number) => {
@@ -76,9 +114,7 @@ const PromotionManager = () => {
             const token = localStorage.getItem('capriccio_token_admin');
             await fetch(`${API_URL}/api/promos/${id}`, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             fetchPromos();
         } catch (e) { console.error("Error deleting promo:", e); }
@@ -87,20 +123,22 @@ const PromotionManager = () => {
     const startEdit = (promo: Promotion) => {
         setEditingId(promo.id);
         setEditForm(promo);
+        setImagePreview(promo.imagen || '');
         setIsAdding(false);
     };
 
     const startAdd = () => {
         setEditingId(null);
-        setEditForm({
-            titulo: '',
-            subtitulo: '',
-            precio: '',
-            color: 'from-capriccio-accent to-capriccio-gold',
-            imagen: '',
-            badge: 'NUEVA PROMO'
-        });
+        setEditForm(EMPTY_FORM);
+        setImagePreview('');
         setIsAdding(true);
+    };
+
+    const cancelEdit = () => {
+        setEditingId(null);
+        setIsAdding(false);
+        setEditForm(EMPTY_FORM);
+        setImagePreview('');
     };
 
     if (isLoading) return <div className="p-20 text-center animate-pulse text-slate-400 font-black uppercase tracking-widest">Cargando Módulo de Promociones...</div>;
@@ -130,46 +168,65 @@ const PromotionManager = () => {
                             className="bg-white p-8 rounded-[2.5rem] shadow-2xl border-2 border-slate-900 relative overflow-hidden"
                         >
                             <div className="absolute top-0 right-0 p-4">
-                                <button onClick={() => { setEditingId(null); setIsAdding(false); }} className="text-slate-300 hover:text-slate-900 transition-colors"><X size={24} /></button>
+                                <button onClick={cancelEdit} className="text-slate-300 hover:text-slate-900 transition-colors"><X size={24} /></button>
                             </div>
                             <h3 className="text-xs font-black uppercase tracking-[0.3em] text-slate-400 mb-6">{editingId ? 'Editando Promo' : 'Nueva Promo'}</h3>
 
                             <div className="space-y-4">
+                                {/* Image Upload */}
+                                <div
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-full h-36 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all overflow-hidden relative"
+                                >
+                                    {imagePreview ? (
+                                        <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <>
+                                            <Upload size={28} className="text-slate-300 mb-2" />
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Subir Imagen</p>
+                                        </>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-all flex items-center justify-center opacity-0 hover:opacity-100">
+                                        <span className="bg-white/80 text-slate-900 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">Cambiar foto</span>
+                                    </div>
+                                </div>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleImageFile}
+                                />
+
                                 <input
                                     placeholder="TÍTULO (Ej: COMBO 2X1)"
-                                    className="w-full bg-slate-50 p-4 rounded-2xl font-black italic uppercase outline-none border-2 border-transparent focus:border-slate-900/10 transition-all"
-                                    value={editForm.titulo}
+                                    className="w-full bg-slate-50 text-slate-900 p-4 rounded-2xl font-black italic uppercase outline-none border-2 border-transparent focus:border-slate-900/20 transition-all"
+                                    value={editForm.titulo || ''}
                                     onChange={e => setEditForm({ ...editForm, titulo: e.target.value.toUpperCase() })}
                                 />
                                 <input
                                     placeholder="SUBTÍTULO"
-                                    className="w-full bg-slate-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-slate-900/10 transition-all text-sm"
-                                    value={editForm.subtitulo}
+                                    className="w-full bg-slate-50 text-slate-900 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-slate-900/20 transition-all text-sm"
+                                    value={editForm.subtitulo || ''}
                                     onChange={e => setEditForm({ ...editForm, subtitulo: e.target.value })}
                                 />
                                 <div className="grid grid-cols-2 gap-3">
                                     <input
-                                        placeholder="PRECIO/BOTÓN"
-                                        className="w-full bg-slate-50 p-4 rounded-2xl font-black italic outline-none border-2 border-transparent focus:border-slate-900/10 transition-all text-sm"
-                                        value={editForm.precio}
+                                        placeholder="PRECIO / BOTÓN"
+                                        className="w-full bg-slate-50 text-slate-900 p-4 rounded-2xl font-black italic outline-none border-2 border-transparent focus:border-slate-900/20 transition-all text-sm"
+                                        value={editForm.precio as string || ''}
                                         onChange={e => setEditForm({ ...editForm, precio: e.target.value })}
                                     />
                                     <input
                                         placeholder="BADGE"
-                                        className="w-full bg-slate-50 p-4 rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none border-2 border-transparent focus:border-slate-900/10 transition-all"
-                                        value={editForm.badge}
+                                        className="w-full bg-slate-50 text-slate-900 p-4 rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none border-2 border-transparent focus:border-slate-900/20 transition-all"
+                                        value={editForm.badge || ''}
                                         onChange={e => setEditForm({ ...editForm, badge: e.target.value.toUpperCase() })}
                                     />
                                 </div>
-                                <input
-                                    placeholder="URL IMAGEN (Unsplash o URL directa)"
-                                    className="w-full bg-slate-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-slate-900/10 transition-all text-xs"
-                                    value={editForm.imagen}
-                                    onChange={e => setEditForm({ ...editForm, imagen: e.target.value })}
-                                />
                                 <select
-                                    className="w-full bg-slate-50 p-4 rounded-2xl font-black uppercase tracking-widest text-[10px] outline-none border-2 border-transparent focus:border-slate-900/10 transition-all"
-                                    value={editForm.color}
+                                    className="w-full bg-slate-50 text-slate-900 p-4 rounded-2xl font-black uppercase tracking-widest text-[10px] outline-none border-2 border-transparent focus:border-slate-900/20 transition-all"
+                                    value={editForm.color || ''}
                                     onChange={e => setEditForm({ ...editForm, color: e.target.value })}
                                 >
                                     <option value="from-capriccio-accent to-capriccio-gold">Capriccio Clásico</option>
@@ -181,10 +238,11 @@ const PromotionManager = () => {
 
                                 <button
                                     onClick={handleSave}
-                                    className="w-full bg-slate-950 text-white py-5 rounded-2xl font-black italic uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2"
+                                    disabled={isSaving}
+                                    className="w-full bg-slate-950 text-white py-5 rounded-2xl font-black italic uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <Save size={20} />
-                                    GUARDAR CAMBIOS
+                                    {isSaving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
                                 </button>
                             </div>
                         </motion.div>
@@ -199,7 +257,11 @@ const PromotionManager = () => {
                             className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden group hover:shadow-2xl transition-all duration-500"
                         >
                             <div className="relative h-48 overflow-hidden">
-                                <img src={promo.imagen} alt={promo.titulo} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                {promo.imagen ? (
+                                    <img src={promo.imagen} alt={promo.titulo} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                ) : (
+                                    <div className={cn("absolute inset-0 bg-gradient-to-br", promo.color)} />
+                                )}
                                 <div className={cn("absolute inset-0 bg-gradient-to-br opacity-60", promo.color)} />
                                 <div className="absolute top-4 left-4">
                                     <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[8px] font-black text-white uppercase tracking-widest">
@@ -234,6 +296,14 @@ const PromotionManager = () => {
                         </motion.div>
                     ))}
                 </AnimatePresence>
+
+                {promos.length === 0 && !isAdding && (
+                    <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-100 rounded-[3rem]">
+                        <Sparkles size={40} className="opacity-20 mb-4" />
+                        <p className="font-black italic uppercase tracking-widest text-sm opacity-30">No hay promociones activas</p>
+                        <p className="text-xs text-slate-300 mt-2 opacity-30">Haz click en "Nueva Promo" para crear la primera</p>
+                    </div>
+                )}
             </div>
         </div>
     );

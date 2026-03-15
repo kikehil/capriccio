@@ -88,8 +88,21 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, repartidoresOn
                         <p className="text-2xl font-black italic text-slate-900 uppercase leading-none tracking-tighter mb-2">
                             {item.quantity}x {item.nombre}
                         </p>
+                        
+                        {(item as any).size && (
+                            <p className="text-sm font-bold text-slate-500 uppercase italic mb-1">
+                                • {(item as any).size}
+                            </p>
+                        )}
+                        
+                        {(item as any).crust && (
+                            <p className="text-sm font-bold text-red-600 uppercase italic mb-2">
+                                • {(item as any).crust}
+                            </p>
+                        )}
+
                         {item.extras && item.extras.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2 mt-2">
                                 {item.extras.map((extra: any, eIdx: number) => (
                                     <span key={eIdx} className="text-[10px] font-black bg-red-50 text-red-600 px-2 py-1 rounded-lg uppercase italic flex items-center gap-1">
                                         <Check className="w-2 h-2 stroke-[4px]" />

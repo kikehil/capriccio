@@ -2,8 +2,10 @@ import { Pizza } from "@/data/menu";
 import { ExtraOption } from "@/data/options";
 
 export interface CartItem extends Pizza {
+    size?: string; // e.g. 'Mini', 'Chica', 'Mediana', 'Grande'
+    crust?: string; // 'Orilla Rellena de Queso (+$45)', etc.
     extras: ExtraOption[];
     totalItemPrice: number;
     quantity: number;
-    cartId: string; // To distinguish between same pizza with different extras
+    cartId: string; // Identifier for identical configurations
 }

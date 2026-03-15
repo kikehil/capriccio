@@ -12,13 +12,18 @@ import PromotionManager from './PromotionManager';
 import ReportsModule from './ReportsModule';
 import UserManager from './UserManager';
 import SettlementManager from './SettlementManager';
+import PlatformDashboard from './PlatformDashboard';
 import Login from './Login';
 import { pizzas as initialPizzas, Pizza } from '@/data/menu';
+import BasicOrdersList from './BasicOrdersList';
 
 import { getSocket, API_URL } from '@/lib/socket';
 
 const AdminDashboard = () => {
-    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte'>('stats');
+    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform'>('stats');
+    const [plan, setPlan] = React.useState<string>('basico');
+    const [isAuth, setIsAuth] = React.useState(false);
+    const [checkingAuth, setCheckingAuth] = React.useState(true);
     const [products, setProducts] = React.useState<Pizza[]>(initialPizzas);
     const [dailyRevenue, setDailyRevenue] = React.useState(0);
     const [orderCount, setOrderCount] = React.useState(0);
@@ -32,38 +37,57 @@ const AdminDashboard = () => {
         { dia: 'Sab', ventas: 0 },
         { dia: 'Hoy', ventas: 0 },
     ]);
+    const [liquidatedRevenue, setLiquidatedRevenue] = React.useState(0);
 
     React.useEffect(() => {
+        const token = localStorage.getItem('capriccio_token_admin');
+        const storedPlan = localStorage.getItem('capriccio_user_plan');
+        if (token) {
+            setIsAuth(true);
+            if (storedPlan) setPlan(storedPlan);
+        }
+        setCheckingAuth(false);
+    }, []);
+
+    const fetchStats = async () => {
+        try {
+            const token = localStorage.getItem('capriccio_token_admin');
+            const res = await fetch(`${API_URL}/api/admin/stats`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.revenueToday !== undefined) {
+                setDailyRevenue(data.revenueToday);
+                setOrderCount(data.totalOrders || data.orderCount || 0);
+                setLiquidatedRevenue(data.liquidatedToday || 0);
+                setRecentOrders(data.recentOrders || []);
+                setChartData(prev => prev.map(d => d.dia === 'Hoy' ? { ...d, ventas: data.revenueToday } : d));
+            }
+        } catch (e) {
+            console.error("❌ [Admin] Error al cargar estadísticas:", e);
+        }
+    };
+
+    const fetchProducts = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/productos`);
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) setProducts(data);
+        } catch (error) {
+            console.error("Error fetching products:", error);
+        }
+    };
+
+    React.useEffect(() => {
+        if (!isAuth) return;
         const socket = getSocket();
 
-        // Cargar estadísticas reales al entrar
-        const fetchStats = async () => {
-            try {
-                const token = localStorage.getItem('capriccio_token_admin');
-                const res = await fetch(`${API_URL}/api/admin/stats`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                const data = await res.json();
-                if (data.revenueToday !== undefined) {
-                    setDailyRevenue(data.revenueToday);
-                    setOrderCount(data.totalOrders || data.orderCount || 0);
-                    setRecentOrders(data.recentOrders || []);
-                    // Actualizar gráfica
-                    setChartData(prev => prev.map(d => d.dia === 'Hoy' ? { ...d, ventas: data.revenueToday } : d));
-                }
-            } catch (e) {
-                console.error("❌ [Admin] Error al cargar estadísticas:", e);
-            }
-        };
-
         fetchStats();
+        fetchProducts();
 
         if (!socket) return;
 
         socket.on('nuevo_pedido', (pedido: any) => {
-            console.log("Admin recibiendo pedido:", pedido);
             setDailyRevenue(prev => prev + (pedido.total || 0));
             setOrderCount(prev => prev + 1);
             setRecentOrders(prev => [pedido, ...prev].slice(0, 5));
@@ -72,33 +96,66 @@ const AdminDashboard = () => {
             ));
         });
 
-        // Listen for remote menu updates
         socket.on('menu_actualizado', (updatedProducts: Pizza[]) => {
             setProducts(updatedProducts);
+        });
+
+        socket.on('pedidos_liquidados', () => {
+            fetchStats();
         });
 
         return () => {
             socket.off('nuevo_pedido');
             socket.off('menu_actualizado');
+            socket.off('pedidos_liquidados');
         };
-    }, []);
+    }, [isAuth]);
 
-    const updateProduct = (id: number, updates: Partial<Pizza>) => {
-        const newProducts = products.map(p => p.id === id ? { ...p, ...updates } : p);
-        setProducts(newProducts);
-
-        // Emit to all clients via Bridge Server
-        const socket = getSocket();
-        if (socket) socket.emit('actualizar_menu', newProducts);
+    const updateProduct = async (id: number, updates: Partial<Pizza>) => {
+        try {
+            const token = localStorage.getItem('capriccio_token_admin');
+            const res = await fetch(`${API_URL}/api/productos/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(updates)
+            });
+            if (res.ok) {
+                const newProducts = products.map(p => p.id === id ? { ...p, ...updates } : p);
+                setProducts(newProducts);
+                const socket = getSocket();
+                if (socket) socket.emit('actualizar_menu', newProducts);
+            }
+        } catch (error) {
+            console.error(error);
+        }
     };
 
-    /* if (!isAuth) {
-        return <Login onLogin={setIsAuth} />;
-    } */
+    const refreshProducts = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/productos`);
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                setProducts(data);
+                const socket = getSocket();
+                if (socket) socket.emit('actualizar_menu', data);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const handleLoginSuccess = () => {
+        const storedPlan = localStorage.getItem('capriccio_user_plan');
+        if (storedPlan) setPlan(storedPlan);
+        setIsAuth(true);
+    };
+
+    if (checkingAuth) return null;
+    // Removido Login redundante aquí, ya controlado por ProtectedRoute.
 
     const renderContent = () => {
         if (activeTab === 'products') {
-            return <ProductManager products={products} onUpdate={updateProduct} />;
+            return <ProductManager products={products} onUpdate={updateProduct} onRefresh={refreshProducts} />;
         }
         if (activeTab === 'users') {
             return <UserManager />;
@@ -109,8 +166,45 @@ const AdminDashboard = () => {
         if (activeTab === 'corte') {
             return <SettlementManager />;
         }
-
+        if (activeTab === 'platform') {
+            return <PlatformDashboard />;
+        }
         if (activeTab === 'stats') {
+            if (plan === 'basico') {
+                return (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        {/* Stats Summary Cards for Basic Plan */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div className="bg-red-600 p-8 rounded-[3rem] shadow-2xl shadow-red-600/30 text-white relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Monto $ de pedidos recibidos</p>
+                                <h4 className="text-5xl font-black italic leading-none transition-all">${dailyRevenue.toLocaleString()}</h4>
+                            </div>
+
+                            <div className="bg-green-600 p-8 rounded-[3rem] shadow-2xl shadow-green-600/30 text-white relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Monto total de pedidos liquidados</p>
+                                <h4 className="text-5xl font-black italic leading-none transition-all">${liquidatedRevenue.toLocaleString()}</h4>
+                            </div>
+
+                            <div className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-50 flex items-center justify-between">
+                                <div>
+                                    <p className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 mb-2">Pedidos Recibidos</p>
+                                    <p className="text-4xl font-black italic text-slate-900 leading-none">{orderCount}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 mb-2">Plan Actual</p>
+                                    <span className="bg-slate-900 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest italic">Básico</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Full Detailed Orders List */}
+                        <BasicOrdersList onStatusChange={fetchStats} />
+                    </div>
+                );
+            }
+
             return (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -197,9 +291,9 @@ const AdminDashboard = () => {
                                             className="flex justify-between items-center p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all cursor-default"
                                         >
                                             <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center font-black text-xs text-yellow-400">#{order.id.split('-')[1] || order.id.slice(-4)}</div>
+                                                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center font-black text-xs text-yellow-400">#{order.id?.split('-')[1] || order.id?.slice(-4) || '---'}</div>
                                                 <div>
-                                                    <p className="text-sm font-black italic uppercase leading-none mb-1">{order.items[0].nombre} {order.items.length > 1 && `+${order.items.length - 1}`}</p>
+                                                    <p className="text-sm font-black italic uppercase leading-none mb-1">{order.items?.[0]?.nombre || 'Pedido'} {order.items?.length > 1 && `+${order.items.length - 1}`}</p>
                                                     <p className="text-[10px] text-slate-500 font-bold tracking-widest">{order.timestamp}</p>
                                                 </div>
                                             </div>
@@ -213,7 +307,7 @@ const AdminDashboard = () => {
                         <div className="bg-white p-8 rounded-[3rem] border border-slate-50 shadow-xl flex flex-col justify-center items-center text-center">
                             <Flame className="text-red-600 mb-4" size={48} />
                             <h4 className="text-2xl font-black italic uppercase tracking-tighter mb-2">Monitor Alpha 1</h4>
-                            <p className="text-slate-400 font-bold italic text-sm max-w-xs">Todos los sistemas operativos. El canal de comunicación con cocina está al 100% de capacidad.</p>
+                            <p className="text-slate-400 font-bold italic text-sm max-w-xs">{plan === 'basico' ? 'Plan Básico: Monitor de ventas activo.' : 'Plan Full: Canal de comunicación con cocina y reparto al 100%.'}</p>
                         </div>
                     </div>
                 </div>
@@ -232,7 +326,7 @@ const AdminDashboard = () => {
     };
 
     return (
-        <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+        <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab} plan={plan}>
             <div className="animate-in fade-in duration-700">
                 {renderContent()}
             </div>

@@ -1,0 +1,18 @@
+Pizza	Ingredientes	Mini	Chica	Mediana	Grande
+Hawaiana	"Jamón, piña, queso mozzarella"	50	65	150	199
+Speciale	"Salchicha, salami, tocino, chorizo y queso mozzarella"	50	65	167	209
+Azteca	"Frijol de base, chorizo, jamón, elote, cebolla, tomate, aguacate, jalapeño y queso mozzarella"	50	65	167	214
+Fredy's	"Aderezo, tocino, pepperoni, salchicha italiana y queso mozzarella"	50	65	173	212
+Pepperoni	Pepperoni y queso mozzarella	50	65	156	199
+Ranchera	"Frijoles, bistec, jalapeños, tomate, pimiento verde y queso mozzarella"	50	65	167	239
+Vegetariana	"Cebolla, champiñón, aceituna, elote, tomate, pimiento, piña, aguacate, queso mozzarella"	50	65	163	199
+Mister	"Pepperoni, champiñón y mozzarella"	50	65	167	209
+Mar & Tierra	"Camarón, tocino, cebolla, champiñón, pimiento verde y queso mozzarella"	50	65	195	249
+Choriqueso	Doble queso y chorizo	50	65	163	199
+Veneciana	"Jamón, aceituna, champiñón, pimiento verde, chorizo, salchichón y queso mozzarella"	50	65	173	212
+Capriccio	"Chipotle, fajita de pollo, piña, fajita de res, elote, pimiento verde y mozzarella"	50	65	195	255
+Jumper	"Pimiento, elote, tocino, queso mozzarella"	50	65	163	199
+Al Pastor	"Cebolla, piña, jalapeños, carne al pastor y queso mozzarella"	50	65	173	212
+Boneless	"Boneless, pepperoni, papas gajo sazonadas y aderezos (ranch y queso amarillo)"	50	65	195	255
+Napoli	"Jamón, salchicha italiana, tocino, champiñón, pimiento verde, queso mozzarella"	50	65	167	209
+Chicken Tenders	"Cebolla, jalapeños, tomate, fajita de pollo y queso mozzarella"	50	65	173	212

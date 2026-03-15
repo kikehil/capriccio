@@ -7,16 +7,20 @@ import { ExtraOption } from '@/data/options';
 import { CartItem } from '@/data/cart';
 import PizzaCard from '@/components/pizza/PizzaCard';
 import FloatingCart from '@/components/cart/FloatingCart';
-import CustomizationModal from '@/components/pizza/CustomizationModal';
+import ProductModal from '@/components/pizza/ProductModal';
 import CheckoutModal from '@/components/cart/CheckoutModal';
 import PromoSlider from '@/components/layout/PromoSlider';
 import NotificationToast, { NotificationType } from '@/components/ui/NotificationToast';
 import { Pizza as PizzaIcon, Phone, MapPin, Clock } from 'lucide-react';
 import { getSocket, API_URL } from '@/lib/socket';
+import { cn } from '@/lib/utils';
 import BrandHeader from '@/components/layout/BrandHeader';
+import PromoBuilder from '@/components/pizza/PromoBuilder';
 
 
 export default function Home() {
+  const CATEGORIES = ["🔥 Promos", "🍕 Pizzas", "🍔 Hamburguesas", "Snacks & Más", "🥤 Bebidas"];
+  const [activeCategory, setActiveCategory] = useState(CATEGORIES[1]); // Pizzas por defecto
   const [menu, setMenu] = useState<Pizza[]>(initialPizzas);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedPizza, setSelectedPizza] = useState<Pizza | null>(null);
@@ -25,13 +29,50 @@ export default function Home() {
   const [isOrdering, setIsOrdering] = useState(false);
 
   useEffect(() => {
+    // Escuchar actualizaciones globales del menú (ej. cuando el admin apaga una pizza) y carga inicial
+    const fetchMenu = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/productos`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            const parsedData = data.map((item: any) => ({
+              ...item,
+              precios: typeof item.precios === 'string' ? JSON.parse(item.precios) : item.precios,
+              activo: item.activo === 1 || item.activo === true
+            }));
+            // Sort to make Jumbo first
+            parsedData.sort((a: any, b: any) => {
+              if (a.nombre.toLowerCase().trim() === 'jumbo') return -1;
+              if (b.nombre.toLowerCase().trim() === 'jumbo') return 1;
+              return 0;
+            });
+            setMenu(parsedData);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching menu:", err);
+      }
+    };
+
+    fetchMenu();
+
     const socket = getSocket();
     if (!socket) return;
 
-    // Escuchar actualizaciones globales del menú (ej. cuando el admin apaga una pizza)
-    socket.on('menu_actualizado', (updatedMenu: Pizza[]) => {
+    socket.on('menu_actualizado', (updatedMenu: any[]) => {
       console.log("Menú actualizado recibido en cliente:", updatedMenu);
-      setMenu(updatedMenu);
+      const parsedData = updatedMenu.map((item: any) => ({
+        ...item,
+        precios: typeof item.precios === 'string' ? JSON.parse(item.precios) : item.precios,
+        activo: item.activo === 1 || item.activo === true
+      }));
+      parsedData.sort((a: any, b: any) => {
+        if (a.nombre.toLowerCase().trim() === 'jumbo') return -1;
+        if (b.nombre.toLowerCase().trim() === 'jumbo') return 1;
+        return 0;
+      });
+      setMenu(parsedData);
     });
 
     return () => {
@@ -59,10 +100,9 @@ export default function Home() {
     setIsModalOpen(true);
   };
 
-  const addToCart = (pizza: Pizza, extras: ExtraOption[], finalPrice: number) => {
-    // Generate a unique ID for this cart entry based on pizza ID and sorted extra IDs
-    const extraIds = extras.map(e => e.id).sort().join('-');
-    const cartId = `${pizza.id}-${extraIds}`;
+  const addToCart = (pizza: Pizza, selectedSizeInfo: any, selectedCrustInfo: any, finalPrice: number) => {
+    // Generate a unique ID for this cart entry based on pizza ID, size, and crust
+    const cartId = `${pizza.id}-${selectedSizeInfo.id}-${selectedCrustInfo.id}`;
 
     const existing = cart.find(item => item.cartId === cartId);
     if (existing) {
@@ -72,13 +112,47 @@ export default function Home() {
     } else {
       setCart([...cart, {
         ...pizza,
-        extras,
+        size: selectedSizeInfo.label,
+        crust: selectedCrustInfo.label !== 'Sin Orilla Rellena' ? selectedCrustInfo.label : undefined,
+        extras: [],
         totalItemPrice: finalPrice,
         quantity: 1,
         cartId
       }]);
     }
     setIsModalOpen(false);
+  };
+
+  const addPromoToCart = (promoItem: any) => {
+    const existing = cart.find(item => item.cartId === promoItem.cartId);
+    if (existing) {
+      setCart(cart.map(item =>
+        item.cartId === promoItem.cartId ? { ...item, quantity: item.quantity + 1 } : item
+      ));
+    } else {
+      setCart([...cart, promoItem]);
+    }
+    showNotification("¡Promo agregada al carrito!");
+  };
+
+  const addComplementoToCart = (item: Pizza) => {
+    const cartId = `comp-${item.id}`;
+    const existing = cart.find(c => c.cartId === cartId);
+    if (existing) {
+      setCart(cart.map(c => 
+        c.cartId === cartId ? { ...c, quantity: c.quantity + 1 } : c
+      ));
+    } else {
+      setCart([...cart, {
+        ...item,
+        size: 'Unico',
+        extras: [],
+        totalItemPrice: item.precio || 0,
+        quantity: 1,
+        cartId
+      }]);
+    }
+    showNotification(`¡${item.nombre} agregado!`);
   };
 
   const sendToOrderChannel = async (userData: any) => {
@@ -99,6 +173,39 @@ export default function Home() {
       lng: userData.lng
     };
 
+    let n8nSuccess = false;
+    let cocinaSuccess = false;
+
+    // 1. Transmitir data estructurada al webhook de n8n SIEMPRE
+    const n8nPayload = {
+      cliente_nombre: userData.nombre,
+      cliente_telefono: userData.telefono,
+      direccion_entrega: userData.direccion,
+      referencias: userData.referencias,
+      coordenadas: userData.lat ? `${userData.lat}, ${userData.lng}` : null,
+      metodo_pago: 'Efectivo',
+      total_pagar: totalPrice,
+      lista_articulos: cart.map(item => ({
+        cantidad: item.quantity,
+        producto: item.nombre,
+        tamano: item.size,
+        orilla_extra: item.crust || 'Normal',
+        precio_unitario: item.totalItemPrice
+      }))
+    };
+
+    try {
+      const n8nRes = await fetch('https://n8n-n8n.amv1ou.easypanel.host/webhook/nuevo-pedido', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(n8nPayload)
+      });
+      if (n8nRes.ok) n8nSuccess = true;
+    } catch (error) {
+      console.error("Error enviando a n8n:", error);
+    }
+
+    // 2. Intentar enviar a Cocina Local (Socket.io bridge)
     try {
       const response = await fetch(`${API_URL}/api/pedidos`, {
         method: 'POST',
@@ -107,164 +214,203 @@ export default function Home() {
       });
 
       if (response.ok) {
+        cocinaSuccess = true;
         const data = await response.json();
         const finalOrderId = data.order_id || 'procesado';
         const displayId = finalOrderId.includes('-') ? finalOrderId.split('-')[1] : finalOrderId;
-
         showNotification(`¡Pedido #${displayId} recibido! Preparando su pizza...`, 'success');
-        setCart([]);
-        setIsCheckoutOpen(false);
-      } else {
-        throw new Error("Error en el servidor");
       }
     } catch (error) {
-      console.error("Error enviando pedido:", error);
-      showNotification("No se pudo conectar con cocina. Intente de nuevo.", 'error');
-    } finally {
-      setIsOrdering(false);
+      console.error("Error enviando a cocina local:", error);
     }
+
+    setIsOrdering(false);
+
+    // 3. Evaluar resultados
+    if (!cocinaSuccess) {
+      if (n8nSuccess) {
+        // Fallback OK: N8n lo cachó y enviará WhatsApp. Todo bien para el cliente.
+        showNotification("¡Pedido recibido! Te confirmaremos por WhatsApp en breve.", 'success');
+      } else {
+        // Fallback FAIL: Ni local ni n8n.
+        showNotification("No pudimos procesar tu pedido. Intenta nuevamente.", 'error');
+        return; // Salir sin borrar carrito
+      }
+    }
+
+    setCart([]);
+    setIsCheckoutOpen(false);
   };
 
-  return (
-    <div className="bg-[#fafafa] min-h-screen selection:bg-yellow-200">
-      <BrandHeader />
-      {/* Dynamic Header / Hero */}
-      <section className="relative h-[80vh] flex items-center justify-center overflow-hidden bg-black">
-        <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/80 z-10" />
-          <motion.img
-            initial={{ scale: 1.2, opacity: 0 }}
-            animate={{ scale: 1, opacity: 0.6 }}
-            transition={{ duration: 1.5 }}
-            src="https://images.unsplash.com/photo-1571997478779-2adcbbe9ab2f?q=80&w=2070"
-            className="w-full h-full object-cover"
-            alt="Wood Fired Oven"
-          />
-        </div>
+return (
+  <div className="bg-[#fafafa] min-h-screen selection:bg-yellow-200">
+    <BrandHeader />
+    {/* Dynamic Header / Hero */}
+    <section className="relative h-[85vh] flex items-center justify-center overflow-hidden bg-black">
+      <div className="absolute inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/80 z-10" />
+        <motion.img
+          initial={{ scale: 1.2, opacity: 0 }}
+          animate={{ scale: 1, opacity: 0.6 }}
+          transition={{ duration: 1.5 }}
+          src="https://images.unsplash.com/photo-1571997478779-2adcbbe9ab2f?q=80&w=2070"
+          className="w-full h-full object-cover"
+          alt="Wood Fired Oven"
+        />
+      </div>
 
-        <div className="relative z-20 container mx-auto px-6 text-center pt-40 pb-20 flex flex-col items-center justify-center min-h-full">
-          <motion.div
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="flex flex-col items-center flex-grow justify-center"
-          >
-            <div className="flex justify-center mb-0">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="relative"
-              >
-                <div className="absolute inset-0 bg-capriccio-gold/10 blur-[100px] rounded-full" />
-                <img
-                  src="/img/capriccio-logo.svg"
-                  alt="Capriccio Logo"
-                  className="relative w-72 md:w-[32rem] h-auto object-contain drop-shadow-[0_20px_50px_rgba(234,179,8,0.3)]"
-                />
-              </motion.div>
-            </div>
-            <p className="text-lg md:text-2xl text-gray-200 font-medium italic mb-6 tracking-wide max-w-2xl mx-auto px-4 drop-shadow-lg">
-              Sabor tradicional al horno de leña en el corazón de Pánuco. Ingredientes premium, pasión artesanal.
-            </p>
-            <motion.a
-              href="#menu"
+      <div className="relative z-20 container mx-auto px-6 text-center pt-32 pb-24 flex flex-col items-center justify-center min-h-full">
+        <motion.div
+          initial={{ y: 50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="flex flex-col items-center justify-center mb-12"
+        >
+          <div className="flex justify-center mb-0">
+            <motion.div
               whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="bg-capriccio-gold hover:bg-capriccio-gold/90 text-capriccio-dark px-10 py-5 md:px-12 md:py-6 rounded-[2rem] font-brand font-black text-lg md:text-xl italic uppercase tracking-widest shadow-2xl transition-all inline-block mb-4"
+              className="relative"
             >
-              ORDENAR AHORA
-            </motion.a>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1 }}
-            className="flex flex-wrap justify-center gap-6 md:gap-12 pb-8"
+              <div className="absolute inset-0 bg-capriccio-gold/10 blur-[100px] rounded-full" />
+              <img
+                src="/img/capriccio-logo.svg"
+                alt="Capriccio Logo"
+                className="relative w-64 md:w-[28rem] h-auto object-contain drop-shadow-[0_20px_50px_rgba(234,179,8,0.3)]"
+              />
+            </motion.div>
+          </div>
+          <p className="text-base md:text-xl text-gray-200 font-medium italic mb-10 tracking-wide max-w-2xl mx-auto px-4 drop-shadow-lg">
+            Sabor tradicional al horno de leña en el corazón de Pánuco. Ingredientes premium, pasión artesanal.
+          </p>
+          <motion.a
+            href="#menu"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="bg-capriccio-gold hover:bg-capriccio-gold/90 text-capriccio-dark px-10 py-5 md:px-12 md:py-6 rounded-[2rem] font-brand font-black text-lg md:text-xl italic uppercase tracking-widest shadow-2xl transition-all inline-block"
           >
-            <div className="flex items-center gap-3 text-white/80">
-              <Clock className="w-5 h-5 text-capriccio-gold" />
-              <span className="text-sm font-bold uppercase tracking-widest">30 MIN</span>
-            </div>
-            <div className="flex items-center gap-3 text-white/80">
-              <MapPin className="w-5 h-5 text-capriccio-gold" />
-              <span className="text-sm font-bold uppercase tracking-widest">A DOMICILIO</span>
-            </div>
-          </motion.div>
+            ORDENAR AHORA
+          </motion.a>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+          className="flex flex-wrap justify-center gap-6 md:gap-12"
+        >
+          <div className="flex items-center gap-3 text-white/80">
+            <Clock className="w-5 h-5 text-capriccio-gold" />
+            <span className="text-xs font-bold uppercase tracking-widest">30 MIN</span>
+          </div>
+          <div className="flex items-center gap-3 text-white/80">
+            <MapPin className="w-5 h-5 text-capriccio-gold" />
+            <span className="text-xs font-bold uppercase tracking-widest">A DOMICILIO</span>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+
+
+    {/* Promotions Slider */}
+    <PromoSlider />
+
+    {/* Menu Section */}
+    <main id="menu" className="container mx-auto px-6 py-10 pb-40">
+
+      {/* Sticky Tabs Nav */}
+      <div className="sticky top-0 z-40 bg-[#18181B] pt-4 pb-4 -mx-6 px-6 mb-10 overflow-x-auto whitespace-nowrap scrollbar-hide border-b border-white/5 shadow-2xl">
+        <div className="flex gap-4">
+          {CATEGORIES.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={cn(
+                "px-6 py-3 rounded-full font-black italic uppercase tracking-widest text-sm transition-all duration-300",
+                activeCategory === cat
+                  ? "bg-capriccio-gold text-capriccio-dark shadow-[0_0_20px_rgba(250,204,21,0.3)]"
+                  : "bg-capriccio-card text-gray-400 hover:bg-white/10 hover:text-white"
+              )}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
-      </section>
+      </div>
 
-
-      {/* Promotions Slider */}
-      <PromoSlider />
-
-      {/* Menu Section */}
-      <main id="menu" className="container mx-auto px-6 py-20 pb-40">
-        <div className="mb-20">
-          <h2 className="text-5xl md:text-6xl font-black italic uppercase tracking-tighter mb-4">
-            Nuestro <span className="text-capriccio-gold">Menú</span>
-          </h2>
-          <div className="w-24 h-2 bg-capriccio-gold rounded-full" />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-          {menu.map(pizza => (
+      {activeCategory === "🔥 Promos" ? (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <PromoBuilder onAddPromo={addPromoToCart} menu={menu} />
+        </motion.div>
+      ) : (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+          {menu.filter(p => p.categoria === activeCategory).map(pizza => (
             <PizzaCard
               key={pizza.id}
               pizza={pizza}
               onAddToCart={() => handleOpenModal(pizza)}
             />
           ))}
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white py-20 border-t border-gray-100">
-        <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12">
-          <div>
-            <img src="/img/capriccio-logo.svg" alt="Capriccio Logo" className="h-16 w-auto mb-6 drop-shadow-xl" />
-            <p className="text-gray-500 font-medium">Las mejores pizzas de la ciudad, elaboradas con ingredientes frescos y el amor que solo nosotros sabemos ponerle.</p>
-          </div>
-          <div>
-            <h4 className="text-xs font-black uppercase tracking-[0.3em] text-gray-400 mb-8">Horarios</h4>
-            <div className="space-y-2">
-              <p className="font-bold flex justify-between"><span>Lun - Jue:</span> <span className="text-gray-500">12:00 PM - 10:00 PM</span></p>
-              <p className="font-bold flex justify-between"><span>Vie - Dom:</span> <span className="text-gray-500">12:00 PM - 12:00 AM</span></p>
+          {menu.filter(p => p.categoria === activeCategory).length === 0 && (
+            <div className="col-span-full py-20 text-center text-gray-500 font-bold italic">
+              <p>No hay artículos disponibles en esta categoría por ahora.</p>
             </div>
-          </div>
-          <div>
-            <h4 className="text-xs font-black uppercase tracking-[0.3em] text-gray-400 mb-8">Ubicación</h4>
-            <p className="font-bold text-gray-700 uppercase italic">Pánuco, Veracruz, México</p>
-            <p className="text-gray-400 text-[10px] font-bold mt-1">Sabor artesanal directo a tu puerta.</p>
-            <p className="text-capriccio-accent font-bold mt-2 underline decoration-2 underline-offset-4 cursor-pointer hover:text-capriccio-gold transition-colors">Ver en Mapa</p>
+          )}
+        </motion.div>
+      )}
+    </main>
+
+    {/* Footer */}
+    <footer className="bg-white py-20 border-t border-gray-100">
+      <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12">
+        <div>
+          <img src="/img/capriccio-logo.svg" alt="Capriccio Logo" className="h-16 w-auto mb-6 drop-shadow-xl" />
+          <p className="text-gray-500 font-medium">Las mejores pizzas de la ciudad, elaboradas con ingredientes frescos y el amor que solo nosotros sabemos ponerle.</p>
+        </div>
+        <div>
+          <h4 className="text-xs font-black uppercase tracking-[0.3em] text-gray-400 mb-8">Horarios</h4>
+          <div className="space-y-2">
+            <p className="font-bold flex justify-between"><span>Lun - Jue:</span> <span className="text-gray-500">12:00 PM - 10:00 PM</span></p>
+            <p className="font-bold flex justify-between"><span>Vie - Dom:</span> <span className="text-gray-500">12:00 PM - 12:00 AM</span></p>
           </div>
         </div>
-        <div className="container mx-auto px-6 mt-20 pt-8 border-t border-gray-50 text-center text-gray-400 text-xs font-bold uppercase tracking-widest">
-          © {new Date().getFullYear()} Pizza Capriccio. Todos los derechos reservados.
+        <div>
+          <h4 className="text-xs font-black uppercase tracking-[0.3em] text-gray-400 mb-8">Ubicación</h4>
+          <p className="font-bold text-gray-700 uppercase italic">Pánuco, Veracruz, México</p>
+          <p className="text-gray-400 text-[10px] font-bold mt-1">Sabor artesanal directo a tu puerta.</p>
+          <p className="text-capriccio-accent font-bold mt-2 underline decoration-2 underline-offset-4 cursor-pointer hover:text-capriccio-gold transition-colors">Ver en Mapa</p>
         </div>
-      </footer>
+      </div>
+      <div className="container mx-auto px-6 mt-20 pt-8 border-t border-gray-50 text-center text-gray-400 text-xs font-bold uppercase tracking-widest">
+        © {new Date().getFullYear()} Pizza Capriccio. Todos los derechos reservados.
+      </div>
+    </footer>
 
-      {/* Overlays */}
-      <CustomizationModal
-        pizza={selectedPizza}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onConfirm={addToCart}
-      />
-      <CheckoutModal
-        isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
-        onConfirm={sendToOrderChannel}
-        total={cart.reduce((acc, item) => acc + (item.totalItemPrice * item.quantity), 0)}
-      />
-      <FloatingCart cart={cart} onOrder={() => setIsCheckoutOpen(true)} />
+    {/* Overlays */}
+    <ProductModal
+      pizza={selectedPizza}
+      isOpen={isModalOpen}
+      onClose={() => setIsModalOpen(false)}
+      onConfirm={addToCart}
+      pizzasList={menu}
+    />
+    <CheckoutModal
+      isOpen={isCheckoutOpen}
+      onClose={() => setIsCheckoutOpen(false)}
+      onConfirm={sendToOrderChannel}
+      total={cart.reduce((acc, item) => acc + (item.totalItemPrice * item.quantity), 0)}
+      cart={cart}
+      menu={menu}
+      onAddComplemento={addComplementoToCart}
+    />
+    <FloatingCart cart={cart} onOrder={() => setIsCheckoutOpen(true)} />
 
-      {/* Notifications */}
-      <NotificationToast
-        isVisible={notification.isVisible}
-        message={notification.message}
-        type={notification.type}
-        onClose={() => setNotification({ ...notification, isVisible: false })}
-      />
-    </div>
-  );
+    {/* Notifications */}
+    <NotificationToast
+      isVisible={notification.isVisible}
+      message={notification.message}
+      type={notification.type}
+      onClose={() => setNotification({ ...notification, isVisible: false })}
+    />
+  </div>
+);
 };

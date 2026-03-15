@@ -1,27 +1,45 @@
 'use client';
 
 import React from 'react';
-import { Package, Flame, BarChart3, Settings, LayoutDashboard, Menu, X, FileText, Users, DollarSign } from 'lucide-react';
+import { Package, Flame, BarChart3, Settings, LayoutDashboard, Menu, X, FileText, Users, DollarSign, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
-    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte';
-    setActiveTab: (tab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte') => void;
+    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform';
+    setActiveTab: (tab: any) => void;
+    plan?: string;
 }
 
-const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiveTab }) => {
+const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiveTab, plan = 'basico' }) => {
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
     const navItems = [
         { id: 'stats', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'corte', label: 'Corte de Caja', icon: DollarSign },
         { id: 'products', label: 'Productos', icon: Package },
-        { id: 'users', label: 'Usuarios', icon: Users },
+        { id: 'users', label: 'Usuarios', icon: Users, role_limit: 'admin' },
         { id: 'reports', label: 'Reportes', icon: FileText },
         { id: 'promos', label: 'Promociones', icon: Flame },
         { id: 'settings', label: 'Configuración', icon: Settings },
-    ];
+        { id: 'platform', label: 'Plataforma', icon: LayoutDashboard, super_only: true },
+    ].filter(item => {
+        const userRole = typeof window !== 'undefined' ? localStorage.getItem('capriccio_user_role') : '';
+        const businessName = typeof window !== 'undefined' ? localStorage.getItem('capriccio_negocio_nombre') : '';
+        
+        // El usuario maestro siempre ve todo (Admin Demo es el nombre del negocio maestro)
+        if (businessName === 'Admin Demo' || userRole === 'admin') return true;
+
+        // Si es la pestaña de plataforma, solo el dueño maestro la ve
+        if (item.id === 'platform') return false;
+
+        // Filtro por plan básico para pizzerías normales
+        if (plan === 'basico') {
+            const allowed = ['stats', 'products', 'promos'];
+            return allowed.includes(item.id);
+        }
+        return true;
+    });
 
     return (
         <div className="flex min-h-screen bg-[#f8fafc]">
@@ -40,7 +58,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
             )}>
                 <div className="flex flex-col items-center mb-12">
                     <img src="/img/capriccio-logo.svg" alt="Logo" className="w-40 h-auto drop-shadow-xl mb-4" />
-                    <span className="text-capriccio-gold text-xs font-black tracking-[0.3em] uppercase border-y border-capriccio-gold/20 py-1">Panel Admin v2</span>
+                    <span className="text-capriccio-gold text-xs font-black tracking-[0.3em] border-y border-capriccio-gold/20 py-1">Panel Admin v2</span>
                 </div>
 
                 <nav className="space-y-3">
@@ -62,19 +80,34 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
                                 "transition-transform group-hover:scale-110",
                                 activeTab === item.id ? "text-capriccio-dark" : "text-slate-600"
                             )} />
-                            <span className="uppercase tracking-widest text-xs">{item.label}</span>
+                            <span className="tracking-widest text-xs font-bold">{item.label}</span>
                         </button>
                     ))}
                 </nav>
 
-                <div className="absolute bottom-8 left-8 right-8">
+                <div className="absolute bottom-6 left-8 right-8 space-y-3">
                     <div className="p-5 bg-white/5 rounded-3xl border border-white/5">
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-2">Usuario</p>
+                        <p className="text-[10px] font-black tracking-[0.3em] text-slate-500 mb-2">Usuario</p>
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-capriccio-gold rounded-lg flex items-center justify-center text-capriccio-dark font-black text-xs italic">C</div>
-                            <p className="font-bold text-sm text-slate-300">Admin Capriccio</p>
+                            <div className="w-8 h-8 bg-capriccio-gold rounded-lg flex items-center justify-center text-capriccio-dark font-black text-xs italic">
+                                {(typeof window !== 'undefined' && localStorage.getItem('capriccio_negocio_nombre')?.charAt(0)) || 'C'}
+                            </div>
+                            <p className="font-bold text-sm text-slate-300">
+                                {typeof window !== 'undefined' ? localStorage.getItem('capriccio_negocio_nombre') : 'Admin Capriccio'}
+                            </p>
                         </div>
                     </div>
+
+                    <button 
+                        onClick={() => {
+                            localStorage.clear();
+                            window.location.reload();
+                        }}
+                        className="flex items-center justify-center gap-3 w-full p-4 rounded-2xl bg-red-500/10 text-red-500 font-bold hover:bg-red-500 hover:text-white transition-all group"
+                    >
+                        <LogOut size={18} className="transition-transform group-hover:scale-110" />
+                        <span className="text-xs tracking-widest font-black italic">Cerrar Sesión</span>
+                    </button>
                 </div>
             </aside>
 
