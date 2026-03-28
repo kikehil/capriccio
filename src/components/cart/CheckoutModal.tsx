@@ -20,12 +20,12 @@ interface CheckoutModalProps {
     onClose: () => void;
     onConfirm: (userData: UserData) => void;
     total: number;
-    cart: CartItem[];
+    cart?: CartItem[];
     menu?: any[];
     onAddComplemento?: (item: any) => void;
 }
 
-const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfirm, total, cart, menu = [], onAddComplemento }) => {
+const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfirm, total, cart = [], menu = [], onAddComplemento }) => {
     const [userData, setUserData] = useState<UserData>({
         nombre: '',
         telefono: '',
