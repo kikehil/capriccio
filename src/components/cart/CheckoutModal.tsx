@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Phone, User, MessageSquare, ArrowRight, LocateFixed, Loader2, Edit2 } from 'lucide-react';
+import { X, MapPin, Phone, User, MessageSquare, ArrowRight, LocateFixed, Loader2, Edit2, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CartItem } from '@/data/cart';
 
@@ -34,12 +34,29 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
     });
     const [isSaved, setIsSaved] = useState(false);
     const [isLocating, setIsLocating] = useState(false);
+    const [clienteLogueado, setClienteLogueado] = useState(false);
 
     useEffect(() => {
+        setClienteLogueado(!!localStorage.getItem('capriccio_cliente_telefono'));
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
         const savedData = localStorage.getItem('pizza_user_data');
         if (savedData) {
             setUserData(JSON.parse(savedData));
             setIsSaved(true);
+        } else {
+            // Pre-llenar con datos del cliente logueado si no hay datos guardados
+            const clienteNombre = localStorage.getItem('capriccio_cliente_nombre');
+            const clienteTelefono = localStorage.getItem('capriccio_cliente_telefono');
+            if (clienteNombre || clienteTelefono) {
+                setUserData(prev => ({
+                    ...prev,
+                    nombre: clienteNombre || prev.nombre,
+                    telefono: clienteTelefono || prev.telefono,
+                }));
+            }
         }
     }, [isOpen]);
 
@@ -263,6 +280,15 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                     >
                                         ✓ Datos recordados de tu última pizza
                                     </motion.p>
+                                )}
+
+                                {clienteLogueado && (
+                                    <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-2xl px-4 py-3">
+                                        <Package size={14} className="text-green-400 shrink-0" />
+                                        <p className="text-green-400 text-[10px] font-black uppercase tracking-wider">
+                                            Este pedido quedará vinculado a tu cuenta — rastréalo en <span className="underline">Mis Pedidos</span>
+                                        </p>
+                                    </div>
                                 )}
 
                                 <button

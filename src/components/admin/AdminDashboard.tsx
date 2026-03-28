@@ -13,6 +13,7 @@ import ReportsModule from './ReportsModule';
 import UserManager from './UserManager';
 import SettlementManager from './SettlementManager';
 import PlatformDashboard from './PlatformDashboard';
+import CapriccioDashboard from './CapriccioDashboard';
 import Login from './Login';
 import { pizzas as initialPizzas, Pizza } from '@/data/menu';
 import BasicOrdersList from './BasicOrdersList';
@@ -20,8 +21,9 @@ import BasicOrdersList from './BasicOrdersList';
 import { getSocket, API_URL } from '@/lib/socket';
 
 const AdminDashboard = () => {
-    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform'>('stats');
+    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform' | 'dashboard'>('stats');
     const [plan, setPlan] = React.useState<string>('basico');
+    const [userRole, setUserRole] = React.useState<string>('admin');
     const [isAuth, setIsAuth] = React.useState(false);
     const [checkingAuth, setCheckingAuth] = React.useState(true);
     const [products, setProducts] = React.useState<Pizza[]>(initialPizzas);
@@ -38,13 +40,38 @@ const AdminDashboard = () => {
         { dia: 'Hoy', ventas: 0 },
     ]);
     const [liquidatedRevenue, setLiquidatedRevenue] = React.useState(0);
+    // Estados para roles caja/responsable (stats post-corte)
+    const [pendingRevenue, setPendingRevenue] = React.useState(0);
+    const [liquidatedAfterCorte, setLiquidatedAfterCorte] = React.useState(0);
+    const [ultimoCorte, setUltimoCorte] = React.useState<string | null>(null);
+    const [doingCorte, setDoingCorte] = React.useState(false);
 
     React.useEffect(() => {
         const token = localStorage.getItem('capriccio_token_admin');
         const storedPlan = localStorage.getItem('capriccio_user_plan');
+        const storedRole = localStorage.getItem('capriccio_user_role');
+        const storedUsername = localStorage.getItem('capriccio_username');
         if (token) {
             setIsAuth(true);
             if (storedPlan) setPlan(storedPlan);
+            if (storedRole) setUserRole(storedRole);
+            // Si no hay username guardado, intentar obtenerlo del servidor
+            if (!storedUsername) {
+                fetch(`${API_URL}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).then(r => r.ok ? r.json() : null).then(data => {
+                    if (data?.username) {
+                        localStorage.setItem('capriccio_username', data.username);
+                        localStorage.setItem('capriccio_negocio_nombre', data.negocio || '');
+                        localStorage.setItem('capriccio_user_plan', data.plan || 'basico');
+                        localStorage.setItem('capriccio_user_role', data.role || 'admin');
+                        setPlan(data.plan || 'basico');
+                        setUserRole(data.role || 'admin');
+                        // Forzar re-render del layout
+                        window.location.reload();
+                    }
+                }).catch(() => {});
+            }
         }
         setCheckingAuth(false);
     }, []);
@@ -58,13 +85,51 @@ const AdminDashboard = () => {
             const data = await res.json();
             if (data.revenueToday !== undefined) {
                 setDailyRevenue(data.revenueToday);
-                setOrderCount(data.totalOrders || data.orderCount || 0);
+                setOrderCount(data.totalOrders || data.order_count || data.orderCount || 0);
                 setLiquidatedRevenue(data.liquidatedToday || 0);
                 setRecentOrders(data.recentOrders || []);
                 setChartData(prev => prev.map(d => d.dia === 'Hoy' ? { ...d, ventas: data.revenueToday } : d));
+                // Stats para caja/responsable
+                setPendingRevenue(data.pendingRevenue || 0);
+                setLiquidatedAfterCorte(data.liquidatedAfterCorte || 0);
+                setUltimoCorte(data.ultimoCorte || null);
             }
         } catch (e) {
             console.error("❌ [Admin] Error al cargar estadísticas:", e);
+        }
+    };
+
+    const handleCorteTurno = async () => {
+        if (!confirm('¿Confirmar Corte de Turno? Esto reiniciará los contadores del turno actual.')) return;
+        setDoingCorte(true);
+        try {
+            const token = localStorage.getItem('capriccio_token_admin');
+            const res = await fetch(`${API_URL}/api/admin/corte-turno`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                await fetchStats();
+                alert('✅ Corte de Turno registrado correctamente.');
+            }
+        } catch (e) {
+            console.error('Error en corte de turno:', e);
+        } finally {
+            setDoingCorte(false);
+        }
+    };
+
+    const formatTime = (dateStr: string) => {
+        if (!dateStr) return '---';
+        try {
+            const safeStr = dateStr.includes(' ') && !dateStr.includes('T') 
+                ? dateStr.replace(' ', 'T') 
+                : dateStr;
+            const date = new Date(safeStr);
+            if (isNaN(date.getTime())) return '---';
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch (e) {
+            return '---';
         }
     };
 
@@ -104,10 +169,15 @@ const AdminDashboard = () => {
             fetchStats();
         });
 
+        socket.on('corte_turno', () => {
+            fetchStats();
+        });
+
         return () => {
             socket.off('nuevo_pedido');
             socket.off('menu_actualizado');
             socket.off('pedidos_liquidados');
+            socket.off('corte_turno');
         };
     }, [isAuth]);
 
@@ -154,6 +224,9 @@ const AdminDashboard = () => {
     // Removido Login redundante aquí, ya controlado por ProtectedRoute.
 
     const renderContent = () => {
+        if (activeTab === 'dashboard') {
+            return <CapriccioDashboard />;
+        }
         if (activeTab === 'products') {
             return <ProductManager products={products} onUpdate={updateProduct} onRefresh={refreshProducts} />;
         }
@@ -170,6 +243,53 @@ const AdminDashboard = () => {
             return <PlatformDashboard />;
         }
         if (activeTab === 'stats') {
+            // Vista para roles caja y responsable
+            if (userRole === 'caja' || userRole === 'responsable') {
+                const ultimoCorteLabel = ultimoCorte
+                    ? new Date(ultimoCorte).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+                    : 'Sin corte previo';
+                return (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            {/* Pendiente por liquidar */}
+                            <div className="bg-red-600 p-8 rounded-[3rem] shadow-2xl shadow-red-600/30 text-white relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Monto $ de pedidos recibidos</p>
+                                <h4 className="text-5xl font-black italic leading-none transition-all">${pendingRevenue.toLocaleString()}</h4>
+                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">Pendientes por liquidar</p>
+                            </div>
+
+                            {/* Liquidados desde el corte */}
+                            <div className="bg-green-600 p-8 rounded-[3rem] shadow-2xl shadow-green-600/30 text-white relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Monto total de pedidos liquidados</p>
+                                <h4 className="text-5xl font-black italic leading-none transition-all">${liquidatedAfterCorte.toLocaleString()}</h4>
+                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">Desde último corte</p>
+                            </div>
+
+                            {/* Corte info + botón para responsable */}
+                            <div className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-50 flex flex-col justify-between">
+                                <div>
+                                    <p className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 mb-2">Último Corte de Turno</p>
+                                    <p className="text-2xl font-black italic text-slate-900 leading-none">{ultimoCorteLabel}</p>
+                                    <p className="text-[9px] text-slate-400 font-bold mt-1">{orderCount} pedidos hoy</p>
+                                </div>
+                                {userRole === 'responsable' && (
+                                    <button
+                                        onClick={handleCorteTurno}
+                                        disabled={doingCorte}
+                                        className="mt-4 w-full bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-black italic uppercase text-xs tracking-widest transition-all shadow-xl active:scale-95 disabled:opacity-50"
+                                    >
+                                        {doingCorte ? 'Procesando...' : '⚡ Corte de Turno'}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <BasicOrdersList onStatusChange={fetchStats} />
+                    </div>
+                );
+            }
+
             if (plan === 'basico') {
                 return (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -291,10 +411,10 @@ const AdminDashboard = () => {
                                             className="flex justify-between items-center p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all cursor-default"
                                         >
                                             <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center font-black text-xs text-yellow-400">#{order.id?.split('-')[1] || order.id?.slice(-4) || '---'}</div>
+                                                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center font-black text-xs text-yellow-400">#{String(order.id)?.split('-')[1] || String(order.id)?.slice(-4) || '---'}</div>
                                                 <div>
                                                     <p className="text-sm font-black italic uppercase leading-none mb-1">{order.items?.[0]?.nombre || 'Pedido'} {order.items?.length > 1 && `+${order.items.length - 1}`}</p>
-                                                    <p className="text-[10px] text-slate-500 font-bold tracking-widest">{order.timestamp}</p>
+                                                    <p className="text-[10px] text-slate-500 font-bold tracking-widest">{formatTime(order.created_at || order.timestamp)}</p>
                                                 </div>
                                             </div>
                                             <p className="text-yellow-400 font-black italic text-lg leading-none">${order.total}</p>

@@ -16,6 +16,7 @@ import { getSocket, API_URL } from '@/lib/socket';
 import { cn } from '@/lib/utils';
 import BrandHeader from '@/components/layout/BrandHeader';
 import PromoBuilder from '@/components/pizza/PromoBuilder';
+import InvitaModal from '@/components/layout/InvitaModal';
 
 
 export default function Home() {
@@ -160,6 +161,10 @@ export default function Home() {
     setIsOrdering(true);
     const totalPrice = cart.reduce((acc, item) => acc + (item.totalItemPrice * item.quantity), 0);
 
+    // Si el cliente está logueado, vincular el pedido a su cuenta
+    const clienteTelefono = localStorage.getItem('capriccio_cliente_telefono');
+    const clienteNombre = localStorage.getItem('capriccio_cliente_nombre');
+
     const pedido = {
       items: cart,
       total: totalPrice,
@@ -170,7 +175,9 @@ export default function Home() {
       telefono: userData.telefono,
       referencias: userData.referencias,
       lat: userData.lat,
-      lng: userData.lng
+      lng: userData.lng,
+      // Vincula el pedido a la cuenta del cliente registrado
+      telefono_cliente: clienteTelefono || userData.telefono,
     };
 
     let n8nSuccess = false;
@@ -218,7 +225,13 @@ export default function Home() {
         const data = await response.json();
         const finalOrderId = data.order_id || 'procesado';
         const displayId = finalOrderId.includes('-') ? finalOrderId.split('-')[1] : finalOrderId;
-        showNotification(`¡Pedido #${displayId} recibido! Preparando su pizza...`, 'success');
+        const clienteLogueado = !!localStorage.getItem('capriccio_cliente_telefono');
+        showNotification(
+          clienteLogueado
+            ? `¡Pedido #${displayId} recibido! Rastréalo en "Mis Pedidos" 📦`
+            : `¡Pedido #${displayId} recibido! Preparando tu pizza... 🍕`,
+          'success'
+        );
       }
     } catch (error) {
       console.error("Error enviando a cocina local:", error);
@@ -245,6 +258,7 @@ export default function Home() {
 return (
   <div className="bg-[#fafafa] min-h-screen selection:bg-yellow-200">
     <BrandHeader />
+    <InvitaModal onAuthSuccess={() => window.location.reload()} />
     {/* Dynamic Header / Hero */}
     <section className="relative h-[85vh] flex items-center justify-center overflow-hidden bg-black">
       <div className="absolute inset-0 z-0">

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Clock, AlertCircle, RefreshCcw } from 'lucide-react';
+import { Check, Clock, AlertCircle, RefreshCcw, ChefHat } from 'lucide-react';
 import { CartItem } from '@/data/cart';
 import { getSocket, API_URL } from '@/lib/socket';
 import { cn } from '@/lib/utils';
@@ -39,13 +39,15 @@ const KitchenDisplay = () => {
 
             const data = await response.json();
 
-            // Mapear y filtrar pedidos activos (recibido o preparando)
+            // Mapear y filtrar pedidos activos (recibido, preparando, en_preparacion)
             // ORDENAR: Más recientes primero para que no se pierdan al final
             const activeOrders = data
-                .filter((o: any) => o.status === 'recibido' || o.status === 'preparando' || o.status === 'pending' || o.status === 'pendiente')
+                .filter((o: any) => o.status === 'recibido' || o.status === 'preparando' || o.status === 'pending' || o.status === 'pendiente' || o.status === 'en_preparacion')
                 .map((o: any) => ({
                     ...o,
+                    id: o.order_id || o.id,
                     order_id: o.order_id || o.id,
+                    createdAt: o.created_at || o.createdAt || new Date().toISOString(),
                     status: (o.status === 'recibido' || o.status === 'pending' || o.status === 'pendiente') ? 'pending' : 'preparing'
                 }))
                 .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -86,12 +88,14 @@ const KitchenDisplay = () => {
             } catch (e) { }
 
             setOrders(prev => {
-                if (prev.some(o => o.id === pedido.id)) return prev;
+                const resolvedId = pedido.order_id || pedido.id;
+                if (prev.some(o => o.id === resolvedId)) return prev;
                 return [
                     {
                         ...pedido,
-                        order_id: pedido.order_id || pedido.id,
-                        createdAt: pedido.createdAt || new Date().toISOString(),
+                        id: resolvedId,
+                        order_id: resolvedId,
+                        createdAt: pedido.created_at || pedido.createdAt || new Date().toISOString(),
                         status: 'pending'
                     },
                     ...prev
@@ -110,6 +114,22 @@ const KitchenDisplay = () => {
             socket.off('repartidores_online');
         };
     }, []);
+
+    const startPreparation = async (id: string) => {
+        const order = orders.find(o => o.id === id);
+        if (!order) return;
+        try {
+            const token = localStorage.getItem('capriccio_token_cocina');
+            const resp = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status: 'en_preparacion' })
+            });
+            if (resp.ok) {
+                setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'preparing' } : o));
+            }
+        } catch (error) { console.error('Error:', error); }
+    };
 
     const completeOrder = async (id: string, repartidor?: string) => {
         const order = orders.find(o => o.id === id);
@@ -133,6 +153,31 @@ const KitchenDisplay = () => {
             }
         } catch (error) {
             console.error("❌ [Cocina] Error al completar pedido:", error);
+        }
+    };
+
+    const completeInStore = async (id: string) => {
+        const order = orders.find(o => o.id === id);
+        if (!order) return;
+
+        try {
+            const token = localStorage.getItem('capriccio_token_cocina');
+            const resp = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    status: 'entregado',
+                    repartidor: 'sucursal'
+                })
+            });
+            if (resp.ok) {
+                setOrders(prev => prev.filter(o => o.id !== id));
+            }
+        } catch (error) {
+            console.error("❌ [Cocina] Error al completar en sucursal:", error);
         }
     };
 
@@ -175,6 +220,8 @@ const KitchenDisplay = () => {
                             key={order.id}
                             order={order}
                             onComplete={completeOrder}
+                            onCompleteInStore={completeInStore}
+                            onStartPreparation={startPreparation}
                             repartidoresOnline={repartidoresOnline}
                         />
                     ))}

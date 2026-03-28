@@ -47,44 +47,90 @@ const authorize = (roles = []) => {
 // Aliases para facilitar lectura
 const authenticateJWT = authorize([]); // Cualquier rol válido
 const adminOnly = authorize(['admin']);
+const adminPanelAccess = authorize(['admin', 'caja', 'responsable', 'marketing']); // Panel admin extendido
 const kitchenOrAdmin = authorize(['admin', 'cocina']);
 const deliveryOrAdmin = authorize(['admin', 'repartidor']);
-const staffOnly = authorize(['admin', 'cocina', 'repartidor']);
+const staffOnly = authorize(['admin', 'cocina', 'repartidor', 'caja', 'responsable', 'marketing']);
 
 // --- AUTH ENDPOINTS ---
+
+// Endpoint para recuperar datos del usuario autenticado desde el token
+app.get('/api/auth/me', authenticateJWT, async (req, res) => {
+    try {
+        const result = await db.query(
+            'SELECT u.username, u.role, u.nombre_completo, n.nombre as negocio_nombre, n.plan FROM usuarios u LEFT JOIN negocios n ON u.negocio_id = n.id WHERE LOWER(u.username) = LOWER($1)',
+            [req.user.username]
+        );
+        if (result.rows.length > 0) {
+            const u = result.rows[0];
+            return res.json({
+                username: u.username,
+                role: u.role,
+                nombre: u.nombre_completo,
+                plan: u.plan || 'basico',
+                negocio: u.negocio_nombre || u.username
+            });
+        }
+        // Para el master admin (platform)
+        if (req.user.role === 'platform') {
+            return res.json({ username: req.user.username, role: 'platform', plan: 'master', negocio: 'Admin Demo' });
+        }
+        res.status(404).json({ error: 'Usuario no encontrado' });
+    } catch (e) {
+        res.status(500).json({ error: 'Error del servidor' });
+    }
+});
+
 app.post('/api/auth/login', async (req, res) => {
     const { username, password, role_request } = req.body;
+    console.log('[LOGIN] Intento:', { username, role_request });
     try {
         const MASTER_PASS = process.env.MASTER_ADMIN_PASSWORD || 'CapriccioAdmin2026!';
         if (role_request === 'admin' && username?.toLowerCase() === 'admin' && password === MASTER_PASS) {
-            const token = jwt.sign({ username: 'admin', role: 'admin', plan: 'premium' }, JWT_SECRET, { expiresIn: '7d' });
-            return res.json({ token, role: 'admin', plan: 'premium', negocio: 'Admin Demo' });
+            console.log('[LOGIN] Maestro OK');
+            const token = jwt.sign({ username: 'admin', role: 'platform', plan: 'master' }, JWT_SECRET, { expiresIn: '7d' });
+            return res.json({ token, role: 'platform', plan: 'master', negocio: 'Admin Demo' });
         }
 
-        let result = await db.query(
-            'SELECT u.*, n.nombre as negocio_nombre, n.plan FROM usuarios u LEFT JOIN negocios n ON u.negocio_id = n.id WHERE LOWER(u.username) = LOWER($1) AND u.role = $2 AND u.activo = 1', 
-            [username, role_request]
-        );
+        // Roles permitidos para el panel /admin
+        const adminPanelRoles = ['admin', 'caja', 'responsable', 'marketing'];
+        let result;
+        if (role_request === 'admin') {
+            result = await db.query(
+                'SELECT u.*, n.nombre as negocio_nombre, n.plan FROM usuarios u LEFT JOIN negocios n ON u.negocio_id = n.id WHERE LOWER(u.username) = LOWER($1) AND u.role IN (\'admin\',\'caja\',\'responsable\',\'marketing\') AND u.activo = 1',
+                [username]
+            );
+        } else {
+            result = await db.query(
+                'SELECT u.*, n.nombre as negocio_nombre, n.plan FROM usuarios u LEFT JOIN negocios n ON u.negocio_id = n.id WHERE LOWER(u.username) = LOWER($1) AND u.role = $2 AND u.activo = 1',
+                [username, role_request]
+            );
+        }
+
+        console.log('[LOGIN] Coincidencias en DB:', result.rows.length);
 
         if (result.rows.length === 0) {
+            console.log('[LOGIN] No se encontró el usuario o rol incorrecto');
             return res.status(401).json({ error: 'Credenciales invalidas' });
         }
 
         const user = result.rows[0];
         const validPass = await bcrypt.compare(password, user.password);
+        console.log('[LOGIN] Password vÁlida:', validPass);
 
         if (validPass) {
-            const token = jwt.sign({ 
-                id: user.id, 
-                username: user.username, 
+            const token = jwt.sign({
+                id: user.id,
+                username: user.username,
                 role: user.role,
                 negocio_id: user.negocio_id,
                 plan: user.plan || 'basico'
             }, JWT_SECRET, { expiresIn: '7d' });
-            
-            return res.json({ 
-                token, 
-                role: user.role, 
+
+            return res.json({
+                token,
+                role: user.role,
+                username: user.username,
                 nombre: user.nombre_completo,
                 plan: user.plan || 'basico',
                 negocio: user.negocio_nombre || 'S/N'
@@ -92,6 +138,7 @@ app.post('/api/auth/login', async (req, res) => {
         }
         res.status(401).json({ error: 'Credenciales invalidas' });
     } catch (err) {
+        console.error('[LOGIN] Error:', err);
         res.status(500).json({ error: 'Error del servidor' });
     }
 });
@@ -295,7 +342,8 @@ app.get('/api/pedidos', staffOnly, async (req, res) => {
 });
 
 app.post('/api/pedidos', async (req, res) => {
-    const { cliente_nombre, telefono, direccion, referencias, items, lat, lng } = req.body;
+    const { cliente_nombre, telefono, direccion, referencias, items, lat, lng, telefono_cliente } = req.body;
+    console.log('📦 [PEDIDO] Recibido:', { cliente_nombre, items_count: items?.length });
     
     // 1. Basic Field Validation
     if (!cliente_nombre || !telefono || !direccion || !items || !Array.isArray(items) || items.length === 0) {
@@ -358,9 +406,9 @@ app.post('/api/pedidos', async (req, res) => {
         }
 
         const pedidoRes = await connection.client.query(
-            `INSERT INTO pedidos (order_id, cliente_nombre, telefono, direccion, referencias, total, lat, lng) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-            [orderId, cliente_nombre, telefono, direccion, referencias, validatedTotal, lat, lng]
+            `INSERT INTO pedidos (order_id, cliente_nombre, telefono, direccion, referencias, total, lat, lng, negocio_id, telefono_cliente)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9) RETURNING id`,
+            [orderId, cliente_nombre, telefono, direccion, referencias, validatedTotal, lat, lng, telefono_cliente || telefono]
         );
         const pedidoId = pedidoRes.rows[0].id;
 
@@ -390,12 +438,14 @@ app.post('/api/pedidos', async (req, res) => {
             order_id: orderId, 
             total: validatedTotal, 
             status: 'pendiente',
-            items: validatedItems 
+            items: validatedItems,
+            created_at: new Date().toISOString()
         });
+        console.log('✅ [PEDIDO] Guardado exitoso:', orderId);
         res.status(201).json({ success: true, order_id: orderId });
     } catch (err) {
         await connection.rollback();
-        console.error("Order Error:", err.message);
+        console.error("❌ [PEDIDO] Error:", err.message);
         res.status(400).json({ error: err.message });
     } finally {
         connection.release();
@@ -408,14 +458,27 @@ app.patch('/api/pedidos/:id/status', staffOnly, async (req, res) => {
     try {
         let updateQuery = 'UPDATE pedidos SET status = $1, repartidor = $2 WHERE order_id = $3 RETURNING *';
         let values = [status, repartidor || 'S/A', id];
-        if (status === 'entregado') {
+        if (status === 'listo') {
+            updateQuery = 'UPDATE pedidos SET status = $1, repartidor = $2, asignado_at = CURRENT_TIMESTAMP WHERE order_id = $3 RETURNING *';
+        } else if (status === 'entregado') {
             updateQuery = 'UPDATE pedidos SET status = $1, repartidor = $2, delivered_at = CURRENT_TIMESTAMP WHERE order_id = $3 RETURNING *';
+        } else if (status === 'en_preparacion') {
+            updateQuery = 'UPDATE pedidos SET status = $1 WHERE order_id = $2 RETURNING *';
+            values = [status, id];
         }
         const result = await db.query(updateQuery, values);
         if (result.rowCount === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
-        
+
         const pedido = result.rows[0];
+        const updatedOrder = pedido;
         io.emit(status === 'listo' ? 'pedido_listo_reparto' : 'pedido_entregado_remoto', pedido);
+        // Emit tracking event for customer
+        io.emit('pedido_tracking_update', {
+            order_id: id,
+            status: status,
+            repartidor: repartidor || null,
+            telefono_cliente: updatedOrder.telefono_cliente || null
+        });
         res.json({ success: true, pedido });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -440,7 +503,7 @@ const getBusinessDate = (dateParam = null) => {
 };
 
 // --- ADMIN STATS & REPORTS ---
-app.get('/api/admin/stats', adminOnly, async (req, res) => {
+app.get('/api/admin/stats', adminPanelAccess, async (req, res) => {
     try {
         const today = getBusinessDate();
         const negocio_id = req.user.negocio_id;
@@ -482,12 +545,129 @@ app.get('/api/admin/stats', adminOnly, async (req, res) => {
             revenueToday: Number(revenueRes.rows[0]?.revenue || 0),
             orderCount: Number(countsRes.rows[0]?.count || 0),
             liquidatedToday: Number(liquidatedRes.rows[0]?.total || 0),
-            recentOrders: recentOrdersWithItems
+            recentOrders: recentOrdersWithItems,
+            pendingRevenue: 0,
+            liquidatedAfterCorte: 0,
+            ultimoCorte: null
         };
+
+        // Para roles caja y responsable: calcular stats desde el último corte de turno
+        if (['caja', 'responsable'].includes(req.user.role) && negocio_id) {
+            const negocioRes = await db.query('SELECT ultimo_corte_turno FROM negocios WHERE id = $1', [negocio_id]);
+            const ultimoCorte = negocioRes.rows[0]?.ultimo_corte_turno;
+            stats.ultimoCorte = ultimoCorte;
+
+            if (ultimoCorte) {
+                const pendingRes = await db.query(
+                    "SELECT SUM(total) as revenue FROM pedidos WHERE created_at > $1 AND liquidado = 0 AND status != 'cancelado'",
+                    [ultimoCorte]
+                );
+                const liqPostCorte = await db.query(
+                    'SELECT SUM(total) as total FROM pedidos WHERE created_at > $1 AND liquidado = 1',
+                    [ultimoCorte]
+                );
+                stats.pendingRevenue = Number(pendingRes.rows[0]?.revenue || 0);
+                stats.liquidatedAfterCorte = Number(liqPostCorte.rows[0]?.total || 0);
+            } else {
+                // Sin corte previo: pending = todo lo no liquidado de hoy
+                stats.pendingRevenue = stats.revenueToday - stats.liquidatedToday;
+                stats.liquidatedAfterCorte = stats.liquidatedToday;
+            }
+        }
+
         fs.appendFileSync('stats_debug.log', `[Stats] Result: ${JSON.stringify(stats)}\n`);
         res.json(stats);
     } catch (err) {
         fs.appendFileSync('stats_debug.log', `[Stats] ERROR: ${err.message}\n`);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Dashboard Analytics — solo para usuario capriccio
+app.get('/api/admin/dashboard', adminOnly, async (req, res) => {
+    try {
+        const today = getBusinessDate();
+
+        // 1. Tarjetas: recibidos y liquidados del día
+        const recibidos = await db.query(
+            "SELECT SUM(total) as monto, COUNT(*) as cantidad FROM pedidos WHERE date(created_at) = $1 AND status != 'cancelado'", [today]);
+        const liquidados = await db.query(
+            "SELECT SUM(total) as monto, COUNT(*) as cantidad FROM pedidos WHERE date(created_at) = $1 AND liquidado = 1", [today]);
+
+        // 2. Gráfica semanal (últimos 7 días)
+        const semanal = await db.query(`
+            SELECT date(created_at) as dia,
+                   SUM(total) as ventas,
+                   COUNT(*) as pedidos
+            FROM pedidos
+            WHERE date(created_at) >= date('now','-6 days') AND status != 'cancelado'
+            GROUP BY dia ORDER BY dia
+        `);
+
+        // 3. Top 5 productos más pedidos (histórico + hoy)
+        const topProductos = await db.query(`
+            SELECT dp.pizza_nombre as nombre, SUM(dp.cantidad) as total_pedidos,
+                   SUM(dp.cantidad * dp.precio_unitario) as total_venta
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.pedido_id = p.id
+            WHERE p.status != 'cancelado'
+            GROUP BY dp.pizza_nombre ORDER BY total_pedidos DESC LIMIT 5
+        `);
+
+        // 4. Promedio de tiempo de espera del cliente (created_at → delivered_at) del mes actual
+        const avgEntrega = await db.query(`
+            SELECT ROUND(AVG((julianday(delivered_at) - julianday(created_at)) * 24 * 60), 0) as promedio_minutos,
+                   COUNT(*) as total_entregados
+            FROM pedidos
+            WHERE status = 'entregado'
+              AND delivered_at IS NOT NULL
+              AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+        `);
+
+        // 5. Top repartidores: eficiencia (asignado_at → delivered_at), pedidos hoy y semana
+        const topRepartidores = await db.query(`
+            SELECT repartidor,
+                   ROUND(AVG((julianday(delivered_at) - julianday(asignado_at)) * 24 * 60), 1) as avg_minutos,
+                   SUM(CASE WHEN date(delivered_at) = $1 THEN 1 ELSE 0 END) as pedidos_hoy,
+                   SUM(CASE WHEN date(delivered_at) >= date('now','-6 days') THEN 1 ELSE 0 END) as pedidos_semana
+            FROM pedidos
+            WHERE status = 'entregado'
+              AND delivered_at IS NOT NULL
+              AND asignado_at IS NOT NULL
+              AND repartidor NOT IN ('S/A','sucursal')
+            GROUP BY repartidor
+            ORDER BY avg_minutos ASC LIMIT 10
+        `, [today]);
+
+        res.json({
+            tarjetas: {
+                recibidosMonto: Number(recibidos.rows[0]?.monto || 0),
+                recibidosCantidad: Number(recibidos.rows[0]?.cantidad || 0),
+                liquidadosMonto: Number(liquidados.rows[0]?.monto || 0),
+                liquidadosCantidad: Number(liquidados.rows[0]?.cantidad || 0),
+            },
+            semanal: semanal.rows,
+            topProductos: topProductos.rows,
+            entrega: {
+                promedioMinutos: Number(avgEntrega.rows[0]?.promedio_minutos || 0),
+                totalEntregados: Number(avgEntrega.rows[0]?.total_entregados || 0),
+            },
+            topRepartidores: topRepartidores.rows
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Corte de Turno — registra timestamp del cambio de turno
+app.post('/api/admin/corte-turno', authorize(['admin', 'responsable']), async (req, res) => {
+    try {
+        const negocio_id = req.user.negocio_id;
+        const now = new Date().toISOString().replace('T', ' ').split('.')[0];
+        await db.query('UPDATE negocios SET ultimo_corte_turno = $1 WHERE id = $2', [now, negocio_id]);
+        io.emit('corte_turno', { corte_at: now, por: req.user.username });
+        res.json({ success: true, corte_at: now });
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
@@ -559,10 +739,338 @@ app.get('/api/platform/negocios', adminOnly, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// REPARTIDORES ONLINE - endpoint REST para cocina
+const repartidoresOnline = {};
+
+app.get('/api/repartidores/online', (req, res) => {
+    res.json(Object.values(repartidoresOnline));
+});
+
 // SOCKETS & START
 io.on('connection', (socket) => {
     socket.on('actualizar_menu', (m) => io.emit('menu_actualizado', m));
+
+    // Al conectar, enviarle al nuevo cliente la lista actual de repartidores
+    socket.emit('repartidores_online', Object.values(repartidoresOnline));
+
+    // Repartidor se registra como disponible
+    socket.on('registro_repartidor', (nombre) => {
+        repartidoresOnline[socket.id] = { nombre, socketId: socket.id };
+        io.emit('repartidores_online', Object.values(repartidoresOnline));
+        console.log(`🛵 Repartidor online: ${nombre}`);
+    });
+
+    // Al desconectarse, remover de la lista
+    socket.on('disconnect', () => {
+        if (repartidoresOnline[socket.id]) {
+            console.log(`🛵 Repartidor offline: ${repartidoresOnline[socket.id].nombre}`);
+            delete repartidoresOnline[socket.id];
+            io.emit('repartidores_online', Object.values(repartidoresOnline));
+        }
+    });
 });
 
-const PORT = 3001;
+// ============================================================
+// MÓDULO DE CLIENTES — LOYALTY PROGRAM
+// ============================================================
+
+// Inicializar tabla clientes al arranque
+(async () => {
+    const dbConn = await db.dbPromise;
+    await dbConn.run(`
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            telefono TEXT UNIQUE NOT NULL,
+            email TEXT,
+            password_hash TEXT NOT NULL,
+            verificado INTEGER DEFAULT 0,
+            codigo_verificacion TEXT,
+            codigo_expira TEXT,
+            puntos INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+    `);
+    console.log('✅ Tabla clientes lista');
+
+    // Add columns if not exist (SQLite ALTER TABLE IF NOT EXISTS workaround)
+    const dbConn2 = await db.dbPromise;
+    const pedidosCols = await dbConn2.all("PRAGMA table_info(pedidos)");
+    const colNames = pedidosCols.map(c => c.name);
+    if (!colNames.includes('telefono_cliente')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN telefono_cliente TEXT");
+    if (!colNames.includes('calificacion')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN calificacion INTEGER DEFAULT 0");
+    if (!colNames.includes('calificacion_comentario')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN calificacion_comentario TEXT");
+    console.log('✅ Columnas tracking listas');
+})();
+
+// Helper: generar código alfanumérico
+function generarCodigo(len = 6) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < len; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+}
+
+// Helper: POST con https nativo — rechaza si status >= 400
+function httpPost(url, body, extraHeaders = {}) {
+    return new Promise((resolve, reject) => {
+        const parsed = new URL(url);
+        const isHttps = parsed.protocol === 'https:';
+        const lib = isHttps ? require('https') : require('http');
+        const payload = JSON.stringify(body);
+        const options = {
+            hostname: parsed.hostname,
+            port: parsed.port || (isHttps ? 443 : 80),
+            path: parsed.pathname + parsed.search,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...extraHeaders }
+        };
+        const req = lib.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                if (res.statusCode >= 400) {
+                    reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+                } else {
+                    resolve({ status: res.statusCode, body: data });
+                }
+            });
+        });
+        req.on('error', reject);
+        req.write(payload);
+        req.end();
+    });
+}
+
+// Helper: enviar código WhatsApp
+// Soporta: Evolution API directo, n8n webhook, o log en consola si no hay config
+async function enviarCodigoWhatsApp(telefono, nombre, codigo) {
+    const evolutionUrl    = process.env.EVOLUTION_API_URL;      // ej: https://evo.tudominio.com
+    const evolutionKey    = process.env.EVOLUTION_API_KEY;      // Global API Key de Evolution
+    const evolutionInst   = process.env.EVOLUTION_INSTANCE;     // nombre de la instancia
+    const webhookUrl      = process.env.WHATSAPP_CODIGO_WEBHOOK;
+
+    const mensaje = `🍕 *Capriccio Pizza*\n\n¡Hola ${nombre}! 👋\n\nTu código de verificación es:\n\n*${codigo}*\n\n⏰ Válido por 15 minutos.\n\nIngresa este código en la app para activar tu cuenta. 🎉`;
+
+    // — OPCIÓN 1: Evolution API directo —
+    if (evolutionUrl && evolutionKey && evolutionInst) {
+        try {
+            // Normalizar número México → 521XXXXXXXXXX (mismo formato que flujo n8n)
+            let num = telefono.toString().replace(/[^0-9]/g, '');
+            if (num.length === 10) num = '521' + num;
+            else if (num.startsWith('52') && num.length === 12) num = '521' + num.slice(2);
+
+            const url = `${evolutionUrl}/message/sendText/${evolutionInst}`;
+            console.log(`[2FA] Enviando a ${num} via Evolution (${evolutionInst})...`);
+            const resp = await httpPost(url, { number: num, text: mensaje }, { apikey: evolutionKey });
+            console.log(`[2FA] ✅ Respuesta Evolution: ${resp.status} ${resp.body}`);
+            return;
+        } catch (e) {
+            console.error('[2FA] ❌ Error Evolution API:', e.message);
+        }
+    } else {
+        console.warn('[2FA] ⚠️  Variables Evolution no configuradas:', { evolutionUrl: !!evolutionUrl, evolutionKey: !!evolutionKey, evolutionInst: !!evolutionInst });
+    }
+
+    // — OPCIÓN 2: n8n webhook —
+    if (webhookUrl) {
+        try {
+            await httpPost(webhookUrl, {
+                tipo: 'codigo_verificacion',
+                telefono,
+                nombre,
+                codigo,
+                mensaje
+            });
+            console.log(`[2FA] ✅ Código enviado via n8n webhook a ${telefono}`);
+            return;
+        } catch (e) {
+            console.error('[2FA] Error webhook:', e.message);
+        }
+    }
+
+    // — FALLBACK: log en consola (desarrollo) —
+    console.log(`\n📱 [2FA CÓDIGO] ${nombre} (${telefono}): ${codigo}\n`);
+}
+
+// JWT para clientes (tipo diferente al staff)
+const CLIENTE_JWT_SECRET = process.env.CLIENTE_JWT_SECRET || JWT_SECRET + '_cliente';
+
+const authenticateCliente = (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Token requerido' });
+    jwt.verify(token, CLIENTE_JWT_SECRET, (err, decoded) => {
+        if (err || decoded.type !== 'cliente') return res.status(403).json({ error: 'Token inválido' });
+        req.cliente = decoded;
+        next();
+    });
+};
+
+// POST /api/clientes/registro
+app.post('/api/clientes/registro', async (req, res) => {
+    const { nombre, telefono, email, password } = req.body;
+    if (!nombre || !telefono || !password) return res.status(400).json({ error: 'Nombre, teléfono y contraseña son requeridos' });
+
+    try {
+        // Verificar si ya existe
+        const existe = await db.query('SELECT id, verificado FROM clientes WHERE telefono = $1', [telefono]);
+        if (existe.rows.length > 0) {
+            const c = existe.rows[0];
+            if (c.verificado) return res.status(409).json({ error: 'Este número ya tiene una cuenta activa' });
+            // Si existe pero no verificado, reenviar código
+        }
+
+        const hash = await bcrypt.hash(password, 10);
+        const codigo = generarCodigo(6);
+        const expira = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+        if (existe.rows.length > 0) {
+            await db.query(
+                'UPDATE clientes SET nombre=$1, email=$2, password_hash=$3, codigo_verificacion=$4, codigo_expira=$5 WHERE telefono=$6',
+                [nombre, email || null, hash, codigo, expira, telefono]
+            );
+        } else {
+            await db.query(
+                'INSERT INTO clientes (nombre, telefono, email, password_hash, codigo_verificacion, codigo_expira) VALUES ($1,$2,$3,$4,$5,$6)',
+                [nombre, telefono, email || null, hash, codigo, expira]
+            );
+        }
+
+        await enviarCodigoWhatsApp(telefono, nombre, codigo);
+        res.json({ ok: true, mensaje: `Código enviado a WhatsApp al número ${telefono}` });
+    } catch (e) {
+        console.error('[registro]', e);
+        res.status(500).json({ error: 'Error al registrar' });
+    }
+});
+
+// POST /api/clientes/verificar
+app.post('/api/clientes/verificar', async (req, res) => {
+    const { telefono, codigo } = req.body;
+    if (!telefono || !codigo) return res.status(400).json({ error: 'Teléfono y código requeridos' });
+
+    try {
+        const result = await db.query(
+            'SELECT * FROM clientes WHERE telefono = $1',
+            [telefono]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Cuenta no encontrada' });
+
+        const cliente = result.rows[0];
+        if (cliente.verificado) return res.status(400).json({ error: 'Cuenta ya verificada' });
+        if (cliente.codigo_verificacion !== codigo.toUpperCase()) return res.status(400).json({ error: 'Código incorrecto' });
+        if (new Date(cliente.codigo_expira) < new Date()) return res.status(400).json({ error: 'Código expirado. Solicita uno nuevo.' });
+
+        await db.query('UPDATE clientes SET verificado=1, codigo_verificacion=NULL, codigo_expira=NULL WHERE telefono=$1', [telefono]);
+
+        const token = jwt.sign({ id: cliente.id, telefono: cliente.telefono, nombre: cliente.nombre, type: 'cliente' }, CLIENTE_JWT_SECRET, { expiresIn: '30d' });
+        res.json({ ok: true, token, nombre: cliente.nombre, telefono: cliente.telefono, puntos: cliente.puntos || 0 });
+    } catch (e) {
+        console.error('[verificar]', e);
+        res.status(500).json({ error: 'Error al verificar' });
+    }
+});
+
+// POST /api/clientes/login
+app.post('/api/clientes/login', async (req, res) => {
+    const { telefono, password } = req.body;
+    if (!telefono || !password) return res.status(400).json({ error: 'Teléfono y contraseña requeridos' });
+
+    try {
+        const result = await db.query('SELECT * FROM clientes WHERE telefono = $1', [telefono]);
+        if (result.rows.length === 0) return res.status(401).json({ error: 'Credenciales incorrectas' });
+
+        const cliente = result.rows[0];
+        if (!cliente.verificado) return res.status(403).json({ error: 'Cuenta no verificada. Revisa tu WhatsApp.', pendiente: true });
+
+        const match = await bcrypt.compare(password, cliente.password_hash);
+        if (!match) return res.status(401).json({ error: 'Credenciales incorrectas' });
+
+        const token = jwt.sign({ id: cliente.id, telefono: cliente.telefono, nombre: cliente.nombre, type: 'cliente' }, CLIENTE_JWT_SECRET, { expiresIn: '30d' });
+        res.json({ ok: true, token, nombre: cliente.nombre, telefono: cliente.telefono, puntos: cliente.puntos || 0 });
+    } catch (e) {
+        console.error('[login cliente]', e);
+        res.status(500).json({ error: 'Error al iniciar sesión' });
+    }
+});
+
+// GET /api/clientes/perfil
+app.get('/api/clientes/perfil', authenticateCliente, async (req, res) => {
+    try {
+        const result = await db.query('SELECT id, nombre, telefono, email, puntos, created_at FROM clientes WHERE id = $1', [req.cliente.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
+        res.json(result.rows[0]);
+    } catch (e) {
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+// POST /api/clientes/reenviar-codigo
+app.post('/api/clientes/reenviar-codigo', async (req, res) => {
+    const { telefono } = req.body;
+    if (!telefono) return res.status(400).json({ error: 'Teléfono requerido' });
+    try {
+        const result = await db.query('SELECT * FROM clientes WHERE telefono = $1 AND verificado = 0', [telefono]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Cuenta no encontrada o ya verificada' });
+        const cliente = result.rows[0];
+        const codigo = generarCodigo(6);
+        const expira = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        await db.query('UPDATE clientes SET codigo_verificacion=$1, codigo_expira=$2 WHERE telefono=$3', [codigo, expira, telefono]);
+        await enviarCodigoWhatsApp(telefono, cliente.nombre, codigo);
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+// ============================================================
+
+// GET /api/clientes/mis-pedidos — pedidos del cliente autenticado
+app.get('/api/clientes/mis-pedidos', authenticateCliente, async (req, res) => {
+    try {
+        // Buscar por telefono_cliente O por telefono de entrega (cubre pedidos antes del registro)
+        const result = await db.query(
+            `SELECT id, order_id, total, status, created_at, delivered_at, repartidor, calificacion, calificacion_comentario
+             FROM pedidos
+             WHERE telefono_cliente = $1 OR telefono = $1
+             ORDER BY created_at DESC LIMIT 20`,
+            [req.cliente.telefono]
+        );
+
+        // Agregar items desde detalle_pedidos
+        const pedidosConItems = await Promise.all(result.rows.map(async (p) => {
+            const itemsRes = await db.query(
+                `SELECT pizza_nombre as nombre, cantidad as quantity, precio_unitario as "totalItemPrice", size, crust
+                 FROM detalle_pedidos WHERE pedido_id = $1`,
+                [p.id]
+            );
+            return { ...p, items: itemsRes.rows };
+        }));
+
+        res.json(pedidosConItems);
+    } catch (e) {
+        console.error('[mis-pedidos]', e);
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+// POST /api/pedidos/:id/calificacion — guardar calificación del cliente
+app.post('/api/pedidos/:id/calificacion', authenticateCliente, async (req, res) => {
+    const { id } = req.params;
+    const { estrellas, comentario } = req.body;
+    if (!estrellas || estrellas < 1 || estrellas > 5) return res.status(400).json({ error: 'Calificación inválida' });
+    try {
+        await db.query(
+            'UPDATE pedidos SET calificacion = $1, calificacion_comentario = $2 WHERE order_id = $3 AND (telefono_cliente = $4 OR telefono = $4)',
+            [estrellas, comentario || null, id, req.cliente.telefono]
+        );
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+// ============================================================
+
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`🚀 SERVIDOR EN PUERTO ${PORT}`));

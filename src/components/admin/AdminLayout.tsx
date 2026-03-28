@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Package, Flame, BarChart3, Settings, LayoutDashboard, Menu, X, FileText, Users, DollarSign, LogOut } from 'lucide-react';
+import { Package, Flame, BarChart3, Settings, LayoutDashboard, Menu, X, FileText, Users, DollarSign, LogOut, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
-    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform';
+    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform' | 'dashboard';
     setActiveTab: (tab: any) => void;
     plan?: string;
 }
@@ -15,29 +15,44 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
     const navItems = [
-        { id: 'stats', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'dashboard', label: 'Dashboard', icon: BarChart3, capriccio_only: true },
+        { id: 'stats', label: 'Pedidos', icon: LayoutDashboard },
         { id: 'corte', label: 'Corte de Caja', icon: DollarSign },
         { id: 'products', label: 'Productos', icon: Package },
-        { id: 'users', label: 'Usuarios', icon: Users, role_limit: 'admin' },
+        { id: 'users', label: 'Usuarios', icon: Users },
         { id: 'reports', label: 'Reportes', icon: FileText },
         { id: 'promos', label: 'Promociones', icon: Flame },
         { id: 'settings', label: 'Configuración', icon: Settings },
         { id: 'platform', label: 'Plataforma', icon: LayoutDashboard, super_only: true },
     ].filter(item => {
         const userRole = typeof window !== 'undefined' ? localStorage.getItem('capriccio_user_role') : '';
+        const username = typeof window !== 'undefined' ? localStorage.getItem('capriccio_username') : '';
         const businessName = typeof window !== 'undefined' ? localStorage.getItem('capriccio_negocio_nombre') : '';
-        
-        // El usuario maestro siempre ve todo (Admin Demo es el nombre del negocio maestro)
-        if (businessName === 'Admin Demo' || userRole === 'admin') return true;
 
-        // Si es la pestaña de plataforma, solo el dueño maestro la ve
+        // 1. SUPER ADMIN (platform)
+        if (userRole === 'platform' || businessName === 'Admin Demo') {
+            return item.id === 'platform';
+        }
         if (item.id === 'platform') return false;
 
-        // Filtro por plan básico para pizzerías normales
-        if (plan === 'basico') {
-            const allowed = ['stats', 'products', 'promos'];
-            return allowed.includes(item.id);
-        }
+        // 2. Dashboard Analytics — solo para usuario capriccio
+        if (item.id === 'dashboard') return username === 'capriccio';
+
+        // 2b. Usuario capriccio tiene acceso completo a todo (sin importar el plan)
+        if (username === 'capriccio') return true;
+
+        // 3. ROL CAJA — solo ve Pedidos
+        if (userRole === 'caja') return item.id === 'stats';
+
+        // 4. ROL RESPONSABLE — solo ve Pedidos
+        if (userRole === 'responsable') return item.id === 'stats';
+
+        // 5. ROL MARKETING — solo Productos y Promociones
+        if (userRole === 'marketing') return ['products', 'promos'].includes(item.id);
+
+        // 6. ADMIN NORMAL — filtro por plan
+        if (plan === 'basico') return ['stats', 'products', 'promos'].includes(item.id);
+
         return true;
     });
 

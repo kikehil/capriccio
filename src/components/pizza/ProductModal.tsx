@@ -89,10 +89,27 @@ const ProductModal: React.FC<ProductModalProps> = ({ pizza, isOpen, onClose, onC
     const isPizzaCategory = pizza.categoria?.toLowerCase().includes('pizza');
     const showCrustOptions = isPizzaCategory && (selectedSize?.id === 'mediana' || selectedSize?.id === 'grande' || selectedSize?.id === 'jumbo');
     const canHalfAndHalf = !isJumbo && isPizzaCategory && (selectedSize?.id === 'mediana' || selectedSize?.id === 'grande');
-    
+
     const appliedCrust = showCrustOptions ? selectedCrust : CRUST_OPTIONS[0];
 
-    const finalPrice = (selectedSize?.price || 0) + appliedCrust.price;
+    // Precio Jumbo: siempre fijo (315) sin importar cuántas especialidades se elijan
+    const jumboBasePrice = pizza.precio || selectedSize?.price || 0;
+
+    // Precio mitad y mitad: se cobra el más alto de las dos especialidades
+    const segundaMitadPizza = isMitadYMitad && segundaMitad
+        ? especialidadesDisponibles.find(p => p.nombre === segundaMitad)
+        : null;
+    const primeraMitadPrice = selectedSize?.price || 0;
+    const segundaMitadPrice = segundaMitadPizza?.precios?.[selectedSize?.id as keyof typeof segundaMitadPizza.precios]
+        ? Number(segundaMitadPizza.precios[selectedSize?.id as keyof typeof segundaMitadPizza.precios])
+        : primeraMitadPrice;
+    const mitadBasePrice = isMitadYMitad && segundaMitad
+        ? Math.max(primeraMitadPrice, segundaMitadPrice)
+        : primeraMitadPrice;
+
+    // Si es Jumbo → precio fijo de la pizza; si no → lógica de mitad/tamaño
+    const basePrice = isJumbo ? jumboBasePrice : mitadBasePrice;
+    const finalPrice = basePrice + appliedCrust.price;
 
     return (
         <AnimatePresence>

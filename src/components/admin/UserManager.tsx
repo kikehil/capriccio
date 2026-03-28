@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, UserPlus, Trash2, Edit2, Shield, Truck, ChefHat, Check, X, Search } from 'lucide-react';
+import { Users, UserPlus, Trash2, Edit2, Shield, Truck, ChefHat, Check, X, Search, DollarSign, Megaphone } from 'lucide-react';
 import { API_URL } from '@/lib/socket';
 
 interface Usuario {
     id: number;
     username: string;
-    role: 'admin' | 'cocina' | 'repartidor';
+    role: 'admin' | 'cocina' | 'repartidor' | 'caja' | 'responsable' | 'marketing';
     nombre_completo: string;
     activo: boolean;
     created_at: string;
@@ -24,7 +24,7 @@ export default function UserManager() {
     const [form, setForm] = useState<{
         username: string;
         password: string;
-        role: 'admin' | 'cocina' | 'repartidor';
+        role: 'admin' | 'cocina' | 'repartidor' | 'caja' | 'responsable' | 'marketing';
         nombre_completo: string;
         activo: boolean;
     }>({
@@ -129,6 +129,9 @@ export default function UserManager() {
             case 'admin': return <Shield className="w-4 h-4 text-purple-600" />;
             case 'cocina': return <ChefHat className="w-4 h-4 text-blue-600" />;
             case 'repartidor': return <Truck className="w-4 h-4 text-amber-600" />;
+            case 'caja': return <DollarSign className="w-4 h-4 text-green-600" />;
+            case 'responsable': return <Users className="w-4 h-4 text-rose-600" />;
+            case 'marketing': return <Megaphone className="w-4 h-4 text-pink-600" />;
             default: return <Users className="w-4 h-4" />;
         }
     };
@@ -277,6 +280,9 @@ export default function UserManager() {
                                         >
                                             <option value="repartidor">Repartidor</option>
                                             <option value="cocina">Cocina</option>
+                                            <option value="caja">Caja</option>
+                                            <option value="responsable">Responsable</option>
+                                            <option value="marketing">Marketing</option>
                                             <option value="admin">Administrador</option>
                                         </select>
                                     </div>

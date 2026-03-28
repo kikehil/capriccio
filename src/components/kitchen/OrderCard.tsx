@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Clock, Bike, X } from 'lucide-react';
+import { Check, Clock, Bike, X, ChefHat } from 'lucide-react';
 import { useTimer } from '@/hooks/useTimer';
 import { CartItem } from '@/data/cart';
 import { cn } from '@/lib/utils';
@@ -18,12 +18,15 @@ interface OrderCardProps {
         items: CartItem[];
         createdAt: string;
         timestamp: string;
+        status?: string;
     };
     onComplete: (id: string, repartidor?: string) => void;
+    onCompleteInStore: (id: string) => void;
+    onStartPreparation: (id: string) => void;
     repartidoresOnline: Repartidor[];
 }
 
-const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, repartidoresOnline }) => {
+const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, onCompleteInStore, onStartPreparation, repartidoresOnline }) => {
     const { days, hours, minutes, seconds, totalSeconds } = useTimer(order.createdAt);
     const [showSelector, setShowSelector] = useState(false);
 
@@ -67,7 +70,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, repartidoresOn
                 <div>
                     <span className={cn("text-[10px] uppercase font-black tracking-[0.2em] opacity-60", accentColor)}>Pedido</span>
                     <p className={cn("text-2xl font-black italic uppercase leading-none", accentColor)}>
-                        #{order.id.split('-')[1] || order.id.slice(-4)}
+                        #{order.id ? (order.id.split('-')[1] || order.id.slice(-4)) : '???'}
                     </p>
                 </div>
                 <div className="flex flex-col items-end">
@@ -153,26 +156,36 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, repartidoresOn
                                 )}
 
                                 <button
-                                    onClick={() => handleAssign('S/A')}
+                                    onClick={() => { onCompleteInStore(order.id); setShowSelector(false); }}
                                     className="w-full mt-2 bg-red-600/20 hover:bg-red-600/40 text-red-500 p-4 rounded-2xl font-black italic uppercase text-xs tracking-widest transition-all"
                                 >
-                                    Omitir Asignación
+                                    Consumo en Sucursal
                                 </button>
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                <button
-                    onClick={() => setShowSelector(true)}
-                    className="w-full bg-slate-900 hover:bg-black text-white py-5 rounded-[1.5rem] font-black text-xl italic uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 overflow-hidden group relative"
-                >
-                    <div className="absolute inset-0 bg-green-500 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                    <span className="relative z-10 flex items-center gap-3">
-                        <Check className="w-7 h-7 stroke-[4px] group-hover:scale-110 transition-transform" />
-                        DESPACHAR
-                    </span>
-                </button>
+                {order.status !== 'preparing' ? (
+                    <button
+                        onClick={() => onStartPreparation(order.id)}
+                        className="w-full bg-amber-500 hover:bg-amber-400 text-white py-5 rounded-[1.5rem] font-black text-xl italic uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+                    >
+                        <ChefHat className="w-7 h-7" />
+                        En Preparación
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => setShowSelector(true)}
+                        className="w-full bg-slate-900 hover:bg-black text-white py-5 rounded-[1.5rem] font-black text-xl italic uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 overflow-hidden group relative"
+                    >
+                        <div className="absolute inset-0 bg-green-500 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                        <span className="relative z-10 flex items-center gap-3">
+                            <Check className="w-7 h-7 stroke-[4px] group-hover:scale-110 transition-transform" />
+                            DESPACHAR
+                        </span>
+                    </button>
+                )}
             </div>
         </motion.div>
     );
