@@ -212,7 +212,7 @@ export default function CustomerAuthModal({ open, onClose, onSuccess, initialSte
                             >
                                 <X size={18} />
                             </button>
-                            <img src="/img/capriccio-logo.svg" alt="Logo" className="h-10 mb-4 drop-shadow-xl" />
+                            <img src="/logohd.png" alt="Logo" className="h-10 w-auto mb-4 drop-shadow-xl" />
                             <h2 className="text-white font-black italic text-2xl uppercase tracking-tight leading-none">
                                 {step === 'login' && 'Bienvenido de vuelta'}
                                 {step === 'register' && 'Crea tu cuenta'}

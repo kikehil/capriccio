@@ -54,6 +54,7 @@ export default function ProtectedRoute({ children, role }: ProtectedRouteProps) 
                 localStorage.setItem(`capriccio_token_${role}`, data.token);
                 localStorage.setItem(`capriccio_user_plan`, data.plan);
                 localStorage.setItem(`capriccio_user_role`, data.role);
+                localStorage.setItem(`capriccio_username`, data.username || '');
                 localStorage.setItem(`capriccio_negocio_nombre`, data.negocio || 'Admin Demo');
                 
                 // Si es repartidor, guardamos su nombre para el socket
@@ -80,7 +81,7 @@ export default function ProtectedRoute({ children, role }: ProtectedRouteProps) 
                     <div className="w-20 h-20 bg-capriccio-gold rounded-3xl flex items-center justify-center mx-auto mb-6 text-slate-900 shadow-xl shadow-capriccio-gold/20">
                         {role === 'repartidor' ? <User size={40} strokeWidth={2.5} /> : <Lock size={40} strokeWidth={2.5} />}
                     </div>
-                    <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 mb-2">
+                    <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 mb-2">
                         {role === 'admin' ? 'Administración' : role === 'cocina' ? 'Cocina' : 'Repartidor'}
                     </h2>
                     <p className="text-slate-400 font-bold italic text-sm mb-8">

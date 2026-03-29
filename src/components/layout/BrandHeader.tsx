@@ -61,7 +61,7 @@ const BrandHeader = () => {
                         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                     >
                         <img
-                            src="/img/capriccio-logo.svg"
+                            src="/logohd.png"
                             alt="Capriccio Logo"
                             className="relative h-16 w-auto drop-shadow-2xl group-hover:scale-105 transition-transform duration-500"
                         />

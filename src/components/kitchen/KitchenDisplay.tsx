@@ -185,7 +185,7 @@ const KitchenDisplay = () => {
         <div className="min-h-screen bg-slate-950 p-4 md:p-8">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-slate-800 pb-8">
                 <div className="flex items-center gap-6">
-                    <img src="/img/capriccio-logo.svg" alt="Logo" className="w-24 h-24 drop-shadow-lg" />
+                    <img src="/logohd.png" alt="Logo" className="h-20 w-auto drop-shadow-lg" />
                     <div>
                         <div className="flex items-center gap-3">
                             <h1 className="text-4xl font-title font-black italic uppercase tracking-widest text-white leading-none">

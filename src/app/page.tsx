@@ -287,7 +287,7 @@ return (
             >
               <div className="absolute inset-0 bg-capriccio-gold/10 blur-[100px] rounded-full" />
               <img
-                src="/img/capriccio-logo.svg"
+                src="/logohd.png"
                 alt="Capriccio Logo"
                 className="relative w-64 md:w-[28rem] h-auto object-contain drop-shadow-[0_20px_50px_rgba(234,179,8,0.3)]"
               />
@@ -377,7 +377,7 @@ return (
     <footer className="bg-white py-20 border-t border-gray-100">
       <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12">
         <div>
-          <img src="/img/capriccio-logo.svg" alt="Capriccio Logo" className="h-16 w-auto mb-6 drop-shadow-xl" />
+          <img src="/logohd.png" alt="Capriccio Logo" className="h-16 w-auto mb-6 drop-shadow-xl" />
           <p className="text-gray-500 font-medium">Las mejores pizzas de la ciudad, elaboradas con ingredientes frescos y el amor que solo nosotros sabemos ponerle.</p>
         </div>
         <div>

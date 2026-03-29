@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     title: "Capriccio",
   },
   icons: {
-    apple: "/img/capriccio-logo.png",
+    apple: "/logohd.png",
   }
 };
 

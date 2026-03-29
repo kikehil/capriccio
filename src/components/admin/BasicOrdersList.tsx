@@ -41,6 +41,21 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
         return `${year}-${month}-${day}`;
     };
 
+    const formatTime = (dateStr: string) => {
+        if (!dateStr) return '---';
+        try {
+            // Convert SQLite YYYY-MM-DD HH:mm:ss to ISO YYYY-MM-DDTHH:mm:ss
+            const safeStr = dateStr.includes(' ') && !dateStr.includes('T') 
+                ? dateStr.replace(' ', 'T') 
+                : dateStr;
+            const date = new Date(safeStr);
+            if (isNaN(date.getTime())) return '---';
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch (e) {
+            return '---';
+        }
+    };
+
     const [orders, setOrders] = useState<Order[]>([]);
     const [filterDate, setFilterDate] = useState(getLocalDate());
     const [isLoading, setIsLoading] = useState(false);
@@ -174,7 +189,7 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
                                             {order.liquidado === 1 && <span className="ml-2 text-[8px] bg-green-100 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-widest">LIQUIDADO</span>}
                                         </p>
                                         <div className="flex items-center gap-3 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-                                            <span className="flex items-center gap-1"><Clock size={10} /> {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            <span className="flex items-center gap-1"><Clock size={10} /> {formatTime(order.created_at)}</span>
                                             <span className={cn(
                                                 "px-2 py-0.5 rounded-md",
                                                 order.status === 'entregado' || order.status === 'listo' ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600"
