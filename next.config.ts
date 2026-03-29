@@ -7,9 +7,43 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
+  // Cambia a false para probar la PWA en local (npm run build && npm start)
   disable: process.env.NODE_ENV === "development",
+  fallbackRoutes: {
+    document: "/offline",
+  },
   workboxOptions: {
     disableDevLogs: true,
+    runtimeCaching: [
+      // Imágenes del menú y logos — Cache First (sirve rápido, actualiza en fondo)
+      {
+        urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
+        handler: "CacheFirst",
+        options: {
+          cacheName: "capriccio-images",
+          expiration: { maxEntries: 80, maxAgeSeconds: 30 * 24 * 60 * 60 },
+        },
+      },
+      // API de menú y productos — Network First con fallback (datos frescos siempre)
+      {
+        urlPattern: /\/api\/(pizzas|products|menu|categorias)/i,
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "capriccio-api-menu",
+          expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 },
+          networkTimeoutSeconds: 5,
+        },
+      },
+      // Google Fonts — Cache First
+      {
+        urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com/i,
+        handler: "CacheFirst",
+        options: {
+          cacheName: "google-fonts",
+          expiration: { maxEntries: 10, maxAgeSeconds: 365 * 24 * 60 * 60 },
+        },
+      },
+    ],
   },
 });
 

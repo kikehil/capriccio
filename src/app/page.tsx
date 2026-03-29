@@ -18,6 +18,8 @@ import BrandHeader from '@/components/layout/BrandHeader';
 import PromoBuilder from '@/components/pizza/PromoBuilder';
 import InvitaModal from '@/components/layout/InvitaModal';
 import CookieBanner from '@/components/layout/CookieBanner';
+import FacebookFeed from '@/components/layout/FacebookFeed';
+import InstallPrompt from '@/components/layout/InstallPrompt';
 
 
 export default function Home() {
@@ -393,6 +395,9 @@ return (
       )}
     </main>
 
+    {/* Facebook Feed */}
+    <FacebookFeed />
+
     {/* Footer */}
     <footer className="bg-slate-950 py-20 border-t border-slate-800">
       <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12">
@@ -440,6 +445,7 @@ return (
     />
     <FloatingCart cart={cart} onOrder={handleOpenCheckout} />
     <CookieBanner />
+    <InstallPrompt />
 
     {/* Modal fuera de horario */}
     {horarioModal && (
