@@ -11,6 +11,7 @@ interface DeliveryOrder {
     id: string;
     cliente_nombre: string;
     direccion: string;
+    referencias?: string;
     telefono: string;
     items: any[];
     total: number;
@@ -340,18 +341,51 @@ const OrderCardView = ({ pedido, isOwn, onDeliver, onMap }: { pedido: DeliveryOr
 
                 {/* --- DETALLE DEL PEDIDO --- */}
                 {pedido.items && pedido.items.length > 0 && (
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Contenido de la entrega</h4>
-                        <ul className="space-y-1">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Contenido de la entrega</h4>
+                        <ul className="space-y-3">
                             {pedido.items.map((item, idx) => (
-                                <li key={idx} className="flex items-center gap-2 text-sm font-bold text-slate-700 italic">
-                                    <span className="text-capriccio-gold font-black">{item.quantity}x</span> {item.nombre}
-                                    {item.extras && item.extras.length > 0 && (
-                                        <span className="text-xs text-red-500 ml-1">(+ {item.extras.map((e: any) => e.nombre).join(', ')})</span>
-                                    )}
+                                <li key={idx} className="border-b border-slate-100 last:border-0 pb-3 last:pb-0">
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-capriccio-gold font-black text-sm min-w-[28px]">{item.quantity}x</span>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-black text-slate-800 uppercase italic leading-tight">{item.nombre}</p>
+                                            {(item.size || item.crust) && (
+                                                <div className="flex gap-2 mt-1 flex-wrap">
+                                                    {item.size && (
+                                                        <span className="text-[10px] font-black uppercase bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                                                            {item.size}
+                                                        </span>
+                                                    )}
+                                                    {item.crust && (
+                                                        <span className="text-[10px] font-black uppercase bg-slate-900 text-white px-2 py-0.5 rounded-full">
+                                                            {item.crust}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {item.extras && item.extras.length > 0 && (
+                                                <div className="mt-1 flex flex-wrap gap-1">
+                                                    {item.extras.map((e: any, ei: number) => (
+                                                        <span key={ei} className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">
+                                                            + {e.nombre}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
+                        {pedido.referencias && (
+                            <div className="mt-2 pt-3 border-t border-slate-200">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Notas / Referencias</p>
+                                <p className="text-sm font-bold text-amber-700 bg-amber-50 border border-amber-100 px-3 py-2 rounded-xl italic">
+                                    {pedido.referencias}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
 
