@@ -471,7 +471,21 @@ app.patch('/api/pedidos/:id/status', staffOnly, async (req, res) => {
 
         const pedido = result.rows[0];
         const updatedOrder = pedido;
-        io.emit(status === 'listo' ? 'pedido_listo_reparto' : 'pedido_entregado_remoto', pedido);
+
+        if (status === 'listo') {
+            // Incluir items y extras para que el repartidor vea el detalle en tiempo real
+            const itemsRes = await db.query(
+                'SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, d.precio_unitario as "totalItemPrice", d.size, d.crust FROM detalle_pedidos d WHERE d.pedido_id = $1',
+                [pedido.id]
+            );
+            for (const item of itemsRes.rows) {
+                const ext = await db.query('SELECT extra_nombre as nombre, precio_extra as precio FROM extras_pedidos WHERE detalle_id = $1', [item.id]);
+                item.extras = ext.rows;
+            }
+            io.emit('pedido_listo_reparto', { ...pedido, items: itemsRes.rows });
+        } else {
+            io.emit('pedido_entregado_remoto', pedido);
+        }
         // Emit tracking event for customer
         io.emit('pedido_tracking_update', {
             order_id: id,
