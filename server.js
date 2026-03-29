@@ -10,11 +10,16 @@ const fs = require('fs');
 const webpush = require('web-push');
 
 // ─── VAPID config ─────────────────────────────────────────────────────────────
-webpush.setVapidDetails(
-    process.env.VAPID_EMAIL || 'mailto:admin@capricciopizzeria.com',
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-);
+if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+        process.env.VAPID_EMAIL || 'mailto:admin@capricciopizzeria.com',
+        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY
+    );
+    console.log('✅ Web Push VAPID configurado');
+} else {
+    console.warn('⚠️  VAPID keys no configuradas — push notifications desactivadas');
+}
 
 const app = express();
 app.use(cors());
