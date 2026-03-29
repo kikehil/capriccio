@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Check } from 'lucide-react';
 import { Pizza } from '@/data/menu';
@@ -34,12 +33,11 @@ const PizzaCard: React.FC<PizzaCardProps> = ({ pizza, onAddToCart }) => {
         >
             {/* Image Container */}
             <div className="relative h-64 w-full overflow-hidden bg-black">
-                <Image
+                <img
                     src={pizza.imagen}
                     alt={pizza.nombre}
-                    fill
                     className={cn(
-                        "object-cover transition-transform duration-700 opacity-90",
+                        "absolute inset-0 w-full h-full object-cover transition-transform duration-700 opacity-90",
                         isHovered && pizza.activo ? "scale-110" : "scale-100",
                         !pizza.activo && "grayscale brightness-50"
                     )}

@@ -21,7 +21,14 @@ import BasicOrdersList from './BasicOrdersList';
 import { getSocket, API_URL } from '@/lib/socket';
 
 const AdminDashboard = () => {
-    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform' | 'dashboard'>('stats');
+    const getInitialTab = () => {
+        if (typeof window === 'undefined') return 'stats';
+        const role = localStorage.getItem('capriccio_user_role');
+        if (role === 'marketing') return 'products';
+        if (role === 'platform') return 'platform';
+        return 'stats';
+    };
+    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform' | 'dashboard'>(getInitialTab());
     const [plan, setPlan] = React.useState<string>('basico');
     const [userRole, setUserRole] = React.useState<string>('admin');
     const [isAuth, setIsAuth] = React.useState(false);
@@ -224,6 +231,12 @@ const AdminDashboard = () => {
     // Removido Login redundante aquí, ya controlado por ProtectedRoute.
 
     const renderContent = () => {
+        // ROL MARKETING: solo puede ver Productos y Promociones
+        if (userRole === 'marketing') {
+            if (activeTab === 'promos') return <PromotionManager />;
+            return <ProductManager products={products} onUpdate={updateProduct} onRefresh={refreshProducts} />;
+        }
+
         if (activeTab === 'dashboard') {
             return <CapriccioDashboard />;
         }

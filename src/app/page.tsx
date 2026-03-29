@@ -28,6 +28,25 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
+  const [horarioModal, setHorarioModal] = useState<'antes' | 'despues' | null>(null);
+
+  const getHoraMexico = () => {
+    const now = new Date();
+    const partes = new Intl.DateTimeFormat('es-MX', {
+      timeZone: 'America/Mexico_City',
+      hour: 'numeric', minute: 'numeric', hour12: false
+    }).formatToParts(now);
+    const h = parseInt(partes.find(p => p.type === 'hour')!.value);
+    const m = parseInt(partes.find(p => p.type === 'minute')!.value);
+    return h * 60 + m; // minutos desde medianoche
+  };
+
+  const handleOpenCheckout = () => {
+    const mins = getHoraMexico();
+    if (mins < 10 * 60) { setHorarioModal('antes'); return; }         // antes de 10:00
+    if (mins >= 21 * 60 + 30) { setHorarioModal('despues'); return; } // 9:30 PM o después
+    setIsCheckoutOpen(true);
+  };
 
   useEffect(() => {
     // Escuchar actualizaciones globales del menú (ej. cuando el admin apaga una pizza) y carga inicial
@@ -374,27 +393,26 @@ return (
     </main>
 
     {/* Footer */}
-    <footer className="bg-white py-20 border-t border-gray-100">
+    <footer className="bg-slate-950 py-20 border-t border-slate-800">
       <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12">
         <div>
           <img src="/logohd.png" alt="Capriccio Logo" className="h-16 w-auto mb-6 drop-shadow-xl" />
-          <p className="text-gray-500 font-medium">Las mejores pizzas de la ciudad, elaboradas con ingredientes frescos y el amor que solo nosotros sabemos ponerle.</p>
+          <p className="text-slate-400 font-medium">Las mejores pizzas de la ciudad, elaboradas con ingredientes frescos y el amor que solo nosotros sabemos ponerle.</p>
         </div>
         <div>
-          <h4 className="text-xs font-black uppercase tracking-[0.3em] text-gray-400 mb-8">Horarios</h4>
+          <h4 className="text-xs font-black uppercase tracking-[0.3em] text-slate-500 mb-8">Horarios</h4>
           <div className="space-y-2">
-            <p className="font-bold flex justify-between"><span>Lun - Jue:</span> <span className="text-gray-500">12:00 PM - 10:00 PM</span></p>
-            <p className="font-bold flex justify-between"><span>Vie - Dom:</span> <span className="text-gray-500">12:00 PM - 12:00 AM</span></p>
+            <p className="font-bold text-white flex justify-between"><span>Lun - Dom:</span> <span className="text-slate-400">10:00 AM - 10:00 PM</span></p>
           </div>
         </div>
         <div>
-          <h4 className="text-xs font-black uppercase tracking-[0.3em] text-gray-400 mb-8">Ubicación</h4>
-          <p className="font-bold text-gray-700 uppercase italic">Pánuco, Veracruz, México</p>
-          <p className="text-gray-400 text-[10px] font-bold mt-1">Sabor artesanal directo a tu puerta.</p>
-          <p className="text-capriccio-accent font-bold mt-2 underline decoration-2 underline-offset-4 cursor-pointer hover:text-capriccio-gold transition-colors">Ver en Mapa</p>
+          <h4 className="text-xs font-black uppercase tracking-[0.3em] text-slate-500 mb-8">Ubicación</h4>
+          <p className="font-bold text-white uppercase italic">Pánuco, Veracruz, México</p>
+          <p className="text-slate-500 text-[10px] font-bold mt-1">Sabor artesanal directo a tu puerta.</p>
+          <p className="text-capriccio-gold font-bold mt-2 underline decoration-2 underline-offset-4 cursor-pointer hover:text-yellow-400 transition-colors">Ver en Mapa</p>
         </div>
       </div>
-      <div className="container mx-auto px-6 mt-20 pt-8 border-t border-gray-50 text-center text-gray-400 text-xs font-bold uppercase tracking-widest">
+      <div className="container mx-auto px-6 mt-20 pt-8 border-t border-slate-800 text-center text-slate-600 text-xs font-bold uppercase tracking-widest">
         © {new Date().getFullYear()} Pizza Capriccio. Todos los derechos reservados.
       </div>
     </footer>
@@ -416,7 +434,51 @@ return (
       menu={menu}
       onAddComplemento={addComplementoToCart}
     />
-    <FloatingCart cart={cart} onOrder={() => setIsCheckoutOpen(true)} />
+    <FloatingCart cart={cart} onOrder={handleOpenCheckout} />
+
+    {/* Modal fuera de horario */}
+    {horarioModal && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="bg-slate-950 border border-slate-800 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl">
+          <div className="text-5xl mb-4">{horarioModal === 'antes' ? '🌅' : '🌙'}</div>
+          {horarioModal === 'antes' ? (
+            <>
+              <h2 className="text-white font-black italic text-2xl uppercase tracking-tight mb-3">
+                ¡Muy temprano, amigo!
+              </h2>
+              <p className="text-slate-400 font-medium leading-relaxed mb-2">
+                Todavía estamos preparando todo con mucho cariño para ti.
+              </p>
+              <p className="text-capriccio-gold font-bold text-lg">
+                Recibimos pedidos a partir de las<br />
+                <span className="text-2xl">10:00 AM</span>
+              </p>
+              <p className="text-slate-500 text-sm mt-2">¡Te esperamos pronto!</p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-white font-black italic text-2xl uppercase tracking-tight mb-3">
+                ¡Ya cerramos por hoy!
+              </h2>
+              <p className="text-slate-400 font-medium leading-relaxed mb-2">
+                Gracias por tu preferencia. La cocina cierra pedidos a las 9:30 PM.
+              </p>
+              <p className="text-capriccio-gold font-bold text-lg">
+                Mañana te atendemos desde las<br />
+                <span className="text-2xl">10:00 AM</span>
+              </p>
+              <p className="text-slate-500 text-sm mt-2">¡Hasta pronto! 🍕</p>
+            </>
+          )}
+          <button
+            onClick={() => setHorarioModal(null)}
+            className="mt-6 w-full bg-capriccio-gold text-slate-950 font-black uppercase tracking-widest py-3 rounded-xl hover:bg-yellow-400 transition-colors"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    )}
 
     {/* Notifications */}
     <NotificationToast

@@ -1,4 +1,6 @@
 import withPWAInit from "@ducanh2912/next-pwa";
+import path from "path";
+import fs from "fs";
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -21,6 +23,24 @@ const nextConfig: NextConfig = {
         hostname: 'images.unsplash.com',
       },
     ],
+  },
+  webpack: (config) => {
+    // Fix: webpack en Windows resuelve el mismo módulo con distinto casing
+    // (D:\WEB\ vs D:\web\), creando dos instancias de layout-router.js
+    // que rompen el contexto de React ("invariant expected layout router").
+    // Normalizamos el snapshot root a la ruta real del proyecto.
+    // fs.realpathSync devuelve el path con el casing real del filesystem (D:\WEB\ no D:\web\)
+    const projectRoot = fs.realpathSync(process.cwd());
+    config.snapshot = {
+      ...config.snapshot,
+      managedPaths: [path.join(projectRoot, 'node_modules')],
+    };
+    // Deshabilitar symlinks para evitar resolución de rutas con distinto casing
+    config.resolve = {
+      ...config.resolve,
+      symlinks: false,
+    };
+    return config;
   },
 };
 
