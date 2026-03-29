@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import BrandHeader from '@/components/layout/BrandHeader';
 import PromoBuilder from '@/components/pizza/PromoBuilder';
 import InvitaModal from '@/components/layout/InvitaModal';
+import CookieBanner from '@/components/layout/CookieBanner';
 
 
 export default function Home() {
@@ -412,8 +413,11 @@ return (
           <p className="text-capriccio-gold font-bold mt-2 underline decoration-2 underline-offset-4 cursor-pointer hover:text-yellow-400 transition-colors">Ver en Mapa</p>
         </div>
       </div>
-      <div className="container mx-auto px-6 mt-20 pt-8 border-t border-slate-800 text-center text-slate-600 text-xs font-bold uppercase tracking-widest">
-        © {new Date().getFullYear()} Pizza Capriccio. Todos los derechos reservados.
+      <div className="container mx-auto px-6 mt-20 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-600 text-xs font-bold uppercase tracking-widest">
+        <span>© {new Date().getFullYear()} Capriccio Pizzería. Todos los derechos reservados.</span>
+        <a href="/privacidad" className="text-slate-500 hover:text-capriccio-gold transition-colors underline underline-offset-4">
+          Aviso de Privacidad
+        </a>
       </div>
     </footer>
 
@@ -435,6 +439,7 @@ return (
       onAddComplemento={addComplementoToCart}
     />
     <FloatingCart cart={cart} onOrder={handleOpenCheckout} />
+    <CookieBanner />
 
     {/* Modal fuera de horario */}
     {horarioModal && (

@@ -34,6 +34,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
     });
     const [isSaved, setIsSaved] = useState(false);
     const [isLocating, setIsLocating] = useState(false);
+    const [privacidadAceptada, setPrivacidadAceptada] = useState(false);
     const [clienteLogueado, setClienteLogueado] = useState(false);
 
     useEffect(() => {
@@ -291,9 +292,37 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                     </div>
                                 )}
 
+                                {/* Consentimiento de privacidad */}
+                                <label className="flex items-start gap-3 cursor-pointer group mt-6">
+                                    <div className="relative mt-0.5 shrink-0">
+                                        <input
+                                            type="checkbox"
+                                            checked={privacidadAceptada}
+                                            onChange={e => setPrivacidadAceptada(e.target.checked)}
+                                            className="sr-only"
+                                            required
+                                        />
+                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${privacidadAceptada ? 'bg-capriccio-gold border-capriccio-gold' : 'border-white/30 bg-white/5 group-hover:border-capriccio-gold/50'}`}>
+                                            {privacidadAceptada && (
+                                                <svg className="w-3 h-3 text-slate-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-slate-400 leading-relaxed">
+                                        He leído y acepto el{' '}
+                                        <a href="/privacidad" target="_blank" className="text-capriccio-gold hover:underline font-bold">
+                                            Aviso de Privacidad
+                                        </a>
+                                        {' '}y autorizo el uso de mis datos (nombre, teléfono y dirección) para procesar y entregar mi pedido.
+                                    </p>
+                                </label>
+
                                 <button
                                     type="submit"
-                                    className="w-full bg-capriccio-gold hover:bg-yellow-400 text-capriccio-dark py-6 rounded-[2rem] font-black text-xl italic uppercase tracking-widest shadow-[var(--shadow-neon-yellow)] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 group"
+                                    disabled={!privacidadAceptada}
+                                    className="w-full bg-capriccio-gold hover:bg-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed text-capriccio-dark py-6 rounded-[2rem] font-black text-xl italic uppercase tracking-widest shadow-[var(--shadow-neon-yellow)] active:scale-95 transition-all flex items-center justify-center gap-4 mt-4 group"
                                 >
                                     ¡PEDIR AHORA!
                                     <ArrowRight className="group-hover:translate-x-2 transition-transform" strokeWidth={3} />
