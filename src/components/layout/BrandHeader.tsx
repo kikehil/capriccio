@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, LogIn, LogOut, Star, Package } from 'lucide-react';
+import { MapPin, LogIn, LogOut, Star, Package, Phone, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import CustomerAuthModal from '@/components/customer/CustomerAuthModal';
 import MisPedidosModal from '@/components/customer/MisPedidosModal';
@@ -19,6 +19,7 @@ const BrandHeader = () => {
     const [showPedidos, setShowPedidos] = useState(false);
     const [cliente, setCliente] = useState<ClienteSession | null>(null);
     const [showMenu, setShowMenu] = useState(false);
+    const [showContacto, setShowContacto] = useState(false);
 
     useEffect(() => {
         const token = localStorage.getItem('capriccio_cliente_token');
@@ -67,18 +68,15 @@ const BrandHeader = () => {
                         />
                     </motion.div>
 
-                    {/* NAVIGATION - DESKTOP */}
-                    <nav className="hidden lg:flex items-center gap-8">
-                        {['Menú', 'Promos', 'Nosotros', 'Contacto'].map((item) => (
-                            <a
-                                key={item}
-                                href={`#${item.toLowerCase()}`}
-                                className="text-white/70 hover:text-capriccio-gold font-brand font-bold text-xs uppercase tracking-widest transition-colors relative group"
-                            >
-                                {item}
-                                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-capriccio-gold transition-all group-hover:w-full" />
-                            </a>
-                        ))}
+                    {/* NAVIGATION - solo Contacto */}
+                    <nav className="hidden lg:flex items-center">
+                        <button
+                            onClick={() => setShowContacto(true)}
+                            className="text-white/70 hover:text-capriccio-gold font-brand font-bold text-xs uppercase tracking-widest transition-colors relative group"
+                        >
+                            Contacto
+                            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-capriccio-gold transition-all group-hover:w-full" />
+                        </button>
                     </nav>
 
                     {/* DERECHA: ubicación + login */}
@@ -181,6 +179,46 @@ const BrandHeader = () => {
                     token={cliente.token}
                     telefono={cliente.telefono}
                 />
+            )}
+
+            {/* Modal Contacto */}
+            {showContacto && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setShowContacto(false)}>
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                    <motion.div
+                        initial={{ scale: 0.85, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.85, opacity: 0 }}
+                        className="relative bg-capriccio-dark border border-capriccio-gold/30 rounded-[2.5rem] p-10 max-w-sm w-full shadow-2xl text-center"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setShowContacto(false)}
+                            className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <img src="/logohd.png" alt="Capriccio" className="h-16 w-auto mx-auto mb-6 drop-shadow-xl" />
+
+                        <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white mb-2">Contáctanos</h3>
+                        <p className="text-white/60 text-sm font-bold italic mb-8">
+                            Para eventos, pedidos especiales o más información
+                        </p>
+
+                        <a
+                            href="tel:8461234567"
+                            className="flex items-center justify-center gap-3 bg-capriccio-gold text-slate-900 py-5 px-8 rounded-2xl font-black text-lg uppercase tracking-widest shadow-xl shadow-capriccio-gold/20 hover:bg-[#e5b020] active:scale-95 transition-all"
+                        >
+                            <Phone size={22} strokeWidth={2.5} />
+                            846-123-4567
+                        </a>
+
+                        <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest mt-6">
+                            Lun – Dom · 10:00 AM – 10:00 PM
+                        </p>
+                    </motion.div>
+                </div>
             )}
         </>
     );
