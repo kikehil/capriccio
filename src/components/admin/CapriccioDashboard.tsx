@@ -36,10 +36,15 @@ function formatMins(raw: number | string | null | undefined) {
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+type TopPeriod = 'dia' | 'semana' | 'mes';
+
 export default function CapriccioDashboard() {
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+    const [topPeriod, setTopPeriod] = useState<TopPeriod>('dia');
+    const [topProductos, setTopProductos] = useState<DashboardData['topProductos']>([]);
+    const [loadingTop, setLoadingTop] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -60,8 +65,29 @@ export default function CapriccioDashboard() {
         }
     };
 
+    const fetchTopProductos = async (period: TopPeriod) => {
+        setLoadingTop(true);
+        try {
+            const token = localStorage.getItem('capriccio_token_admin');
+            const res = await fetch(`${API_URL}/api/admin/top-productos?periodo=${period}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) setTopProductos(await res.json());
+        } catch (e) {
+            console.error('Error cargando top productos:', e);
+        } finally {
+            setLoadingTop(false);
+        }
+    };
+
+    const handleTopPeriod = (p: TopPeriod) => {
+        setTopPeriod(p);
+        fetchTopProductos(p);
+    };
+
     useEffect(() => {
         fetchData();
+        fetchTopProductos('dia');
     }, []);
 
     if (loading) return (
@@ -72,7 +98,7 @@ export default function CapriccioDashboard() {
 
     if (!data) return <p className="text-slate-400 text-center">Error cargando datos.</p>;
 
-    const { tarjetas, semanal, topProductos, entrega, topRepartidores } = data;
+    const { tarjetas, semanal, entrega, topRepartidores } = data;
 
     // Build full 7-day chart (fill missing days with 0)
     const chartDays: { dia: string; ventas: number; pedidos: number }[] = [];
@@ -139,7 +165,7 @@ export default function CapriccioDashboard() {
                     <h4 className="text-4xl font-black italic leading-none text-capriccio-gold">
                         {formatMins(entrega.promedioMinutos)}
                     </h4>
-                    <p className="text-xs font-bold opacity-50 mt-2">{entrega.totalEntregados} entregas este mes</p>
+                    <p className="text-xs font-bold opacity-50 mt-2">{entrega.totalEntregados} entregas hoy</p>
                 </div>
 
                 <div className="bg-white p-7 rounded-[2.5rem] shadow-xl border border-slate-100 group">
@@ -192,8 +218,30 @@ export default function CapriccioDashboard() {
 
                 {/* Top 5 Productos */}
                 <div className="lg:col-span-2 bg-white p-8 rounded-[3rem] shadow-xl border border-slate-50">
-                    <h3 className="text-lg font-black uppercase italic tracking-tight mb-6">Top 5 Productos</h3>
-                    <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-5">
+                        <h3 className="text-lg font-black uppercase italic tracking-tight">Top 5 Productos</h3>
+                        <div className="flex bg-slate-100 rounded-2xl p-1 gap-1">
+                            {(['dia', 'semana', 'mes'] as TopPeriod[]).map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => handleTopPeriod(p)}
+                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        topPeriod === p
+                                            ? 'bg-slate-900 text-white shadow-sm'
+                                            : 'text-slate-400 hover:text-slate-600'
+                                    }`}
+                                >
+                                    {p === 'dia' ? 'Hoy' : p === 'semana' ? 'Semana' : 'Mes'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-4 relative">
+                        {loadingTop && (
+                            <div className="absolute inset-0 bg-white/70 rounded-2xl flex items-center justify-center z-10">
+                                <div className="animate-spin rounded-full h-6 w-6 border-2 border-capriccio-gold border-t-transparent" />
+                            </div>
+                        )}
                         {topProductos.map((p, i) => {
                             const maxPedidos = topProductos[0]?.total_pedidos || 1;
                             const pct = Math.round((Number(p.total_pedidos) / maxPedidos) * 100);
@@ -218,7 +266,7 @@ export default function CapriccioDashboard() {
                                 </div>
                             );
                         })}
-                        {topProductos.length === 0 && (
+                        {topProductos.length === 0 && !loadingTop && (
                             <p className="text-slate-300 text-center font-bold italic text-sm py-8">Sin datos aún</p>
                         )}
                     </div>

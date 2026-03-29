@@ -614,15 +614,19 @@ app.get('/api/admin/dashboard', adminOnly, async (req, res) => {
             GROUP BY dp.pizza_nombre ORDER BY total_pedidos DESC LIMIT 5
         `);
 
-        // 4. Promedio de tiempo de espera del cliente (created_at → delivered_at) del mes actual
+        // 4. Promedio de tiempo de entrega HOY (created_at → delivered_at), max 3h para filtrar outliers
         const avgEntrega = await db.query(`
-            SELECT ROUND(AVG((julianday(delivered_at) - julianday(created_at)) * 24 * 60), 0) as promedio_minutos,
+            SELECT ROUND(AVG(diff_mins), 0) as promedio_minutos,
                    COUNT(*) as total_entregados
-            FROM pedidos
-            WHERE status = 'entregado'
-              AND delivered_at IS NOT NULL
-              AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
-        `);
+            FROM (
+                SELECT (julianday(delivered_at) - julianday(created_at)) * 24 * 60 as diff_mins
+                FROM pedidos
+                WHERE status = 'entregado'
+                  AND delivered_at IS NOT NULL
+                  AND date(created_at) = $1
+                  AND (julianday(delivered_at) - julianday(created_at)) * 24 * 60 BETWEEN 1 AND 180
+            )
+        `, [today]);
 
         // 5. Top repartidores: eficiencia (asignado_at → delivered_at), pedidos hoy y semana
         const topRepartidores = await db.query(`
@@ -654,6 +658,34 @@ app.get('/api/admin/dashboard', adminOnly, async (req, res) => {
             },
             topRepartidores: topRepartidores.rows
         });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Top productos por periodo (dia / semana / mes)
+app.get('/api/admin/top-productos', adminOnly, async (req, res) => {
+    try {
+        const periodo = req.query.periodo || 'dia';
+        const today = getBusinessDate();
+
+        let dateFilter;
+        if (periodo === 'semana') dateFilter = `date(p.created_at) >= date('now','-6 days')`;
+        else if (periodo === 'mes') dateFilter = `strftime('%Y-%m', p.created_at) = strftime('%Y-%m', 'now')`;
+        else dateFilter = `date(p.created_at) = '${today}'`;
+
+        const result = await db.query(`
+            SELECT dp.pizza_nombre as nombre,
+                   SUM(dp.cantidad) as total_pedidos,
+                   SUM(dp.cantidad * dp.precio_unitario) as total_venta
+            FROM detalle_pedidos dp
+            JOIN pedidos p ON dp.pedido_id = p.id
+            WHERE p.status != 'cancelado'
+              AND ${dateFilter}
+            GROUP BY dp.pizza_nombre
+            ORDER BY total_pedidos DESC LIMIT 5
+        `);
+        res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
