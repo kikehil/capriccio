@@ -2,10 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Phone, Lock, User, Mail, CheckCircle, Loader2, ShieldCheck, RefreshCw } from 'lucide-react';
+import { X, Phone, Lock, User, Mail, CheckCircle, Loader2, ShieldCheck, RefreshCw, Star, Gift } from 'lucide-react';
 import { API_URL } from '@/lib/socket';
 
-type Step = 'login' | 'register' | 'verify';
+type Step = 'login' | 'register' | 'verify' | 'welcome';
 
 interface CustomerAuthModalProps {
     open: boolean;
@@ -36,6 +36,7 @@ export default function CustomerAuthModal({ open, onClose, onSuccess, initialSte
     const [code, setCode] = useState(['', '', '', '', '', '']);
     const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
     const [resendCooldown, setResendCooldown] = useState(0);
+    const [welcomeData, setWelcomeData] = useState<{ nombre: string; telefono: string; puntos: number; token: string } | null>(null);
 
     useEffect(() => {
         if (!open) {
@@ -152,7 +153,13 @@ export default function CustomerAuthModal({ open, onClose, onSuccess, initialSte
                 setCode(['', '', '', '', '', '']);
                 codeRefs.current[0]?.focus();
             } else {
-                onSuccess(data);
+                // Si es cuenta nueva (nuevo: true), mostrar bienvenida con pts
+                if (data.nuevo) {
+                    setWelcomeData(data);
+                    setStep('welcome');
+                } else {
+                    onSuccess(data);
+                }
             }
         } catch {
             setError('Error de conexión');
@@ -217,11 +224,13 @@ export default function CustomerAuthModal({ open, onClose, onSuccess, initialSte
                                 {step === 'login' && 'Bienvenido de vuelta'}
                                 {step === 'register' && 'Crea tu cuenta'}
                                 {step === 'verify' && 'Verifica tu número'}
+                                {step === 'welcome' && '¡Ya eres Capriccio!'}
                             </h2>
                             <p className="text-white/50 text-xs font-bold mt-1">
                                 {step === 'login' && 'Accede a tus puntos y beneficios exclusivos'}
                                 {step === 'register' && 'Únete al programa de lealtad Capriccio'}
                                 {step === 'verify' && `Enviamos un código a WhatsApp: ${verifyTel}`}
+                                {step === 'welcome' && 'Tu cuenta está activa y lista'}
                             </p>
                         </div>
 
@@ -350,6 +359,49 @@ export default function CustomerAuthModal({ open, onClose, onSuccess, initialSte
                                         </button>
                                     </p>
                                 </form>
+                            )}
+
+                            {/* ─── STEP: BIENVENIDA LOYALTY ─── */}
+                            {step === 'welcome' && welcomeData && (
+                                <div className="flex flex-col items-center text-center gap-4 py-4">
+                                    <div className="relative">
+                                        <div className="w-24 h-24 bg-[#d4a017]/10 rounded-[2rem] flex items-center justify-center">
+                                            <Gift size={44} className="text-[#d4a017]" />
+                                        </div>
+                                        <div className="absolute -top-2 -right-2 bg-[#d4a017] text-[#0f172a] text-xs font-black rounded-full w-8 h-8 flex items-center justify-center shadow-lg">
+                                            +30
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-[#0f172a] font-black text-lg leading-tight">
+                                            ¡Hola, {welcomeData.nombre.split(' ')[0]}!
+                                        </p>
+                                        <p className="text-slate-500 text-sm font-bold mt-1">
+                                            Recibiste <span className="text-[#d4a017] font-black">30 puntos de bienvenida</span> por registrarte.
+                                        </p>
+                                    </div>
+
+                                    {/* Tarjeta de puntos */}
+                                    <div className="w-full bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl p-5 text-left relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-24 h-24 bg-[#d4a017]/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                                        <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-1">Saldo de puntos</p>
+                                        <div className="flex items-end gap-2">
+                                            <span className="text-[#d4a017] font-black text-4xl leading-none">{welcomeData.puntos}</span>
+                                            <span className="text-white/50 text-sm font-bold mb-1">puntos</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-3">
+                                            <Star size={12} className="text-[#d4a017]" fill="currentColor" />
+                                            <p className="text-white/60 text-xs font-bold">¡Sigue acumulando con cada pedido!</p>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={() => onSuccess(welcomeData)}
+                                        className="w-full bg-[#d4a017] text-[#0f172a] py-4 rounded-2xl font-black italic uppercase tracking-widest text-sm shadow-xl hover:bg-[#e5b020] transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    >
+                                        <CheckCircle size={18} /> ¡Empezar a pedir!
+                                    </button>
+                                </div>
                             )}
 
                             {/* ─── STEP: VERIFICAR 2FA ─── */}

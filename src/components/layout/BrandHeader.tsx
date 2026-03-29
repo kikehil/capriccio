@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, LogIn, LogOut, Star, Package, Phone, X } from 'lucide-react';
+import { MapPin, LogIn, LogOut, Star, Package, Phone, X, Gift } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import CustomerAuthModal from '@/components/customer/CustomerAuthModal';
 import MisPedidosModal from '@/components/customer/MisPedidosModal';
@@ -17,6 +17,7 @@ interface ClienteSession {
 const BrandHeader = () => {
     const [showAuth, setShowAuth] = useState(false);
     const [showPedidos, setShowPedidos] = useState(false);
+    const [pedidosInitialTab, setPedidosInitialTab] = useState<'pedidos' | 'puntos'>('pedidos');
     const [cliente, setCliente] = useState<ClienteSession | null>(null);
     const [showMenu, setShowMenu] = useState(false);
     const [showContacto, setShowContacto] = useState(false);
@@ -144,11 +145,18 @@ const BrandHeader = () => {
                                                 </div>
                                             </div>
                                             <button
-                                                onClick={() => { setShowPedidos(true); setShowMenu(false); }}
+                                                onClick={() => { setPedidosInitialTab('pedidos'); setShowPedidos(true); setShowMenu(false); }}
                                                 className="w-full flex items-center gap-3 px-4 py-3.5 text-slate-700 hover:bg-slate-50 font-black text-xs uppercase tracking-wider transition-colors border-b border-slate-100"
                                             >
                                                 <Package size={15} className="text-[#d4a017]" />
                                                 Mis Pedidos
+                                            </button>
+                                            <button
+                                                onClick={() => { setPedidosInitialTab('puntos'); setShowPedidos(true); setShowMenu(false); }}
+                                                className="w-full flex items-center gap-3 px-4 py-3.5 text-slate-700 hover:bg-slate-50 font-black text-xs uppercase tracking-wider transition-colors border-b border-slate-100"
+                                            >
+                                                <Gift size={15} className="text-[#d4a017]" />
+                                                Mis Puntos
                                             </button>
                                             <button
                                                 onClick={handleLogout}
@@ -178,6 +186,7 @@ const BrandHeader = () => {
                     onClose={() => setShowPedidos(false)}
                     token={cliente.token}
                     telefono={cliente.telefono}
+                    initialTab={pedidosInitialTab}
                 />
             )}
 

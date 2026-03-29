@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Package, Clock, ChefHat, Bike, CheckCircle, Star, Loader2 } from 'lucide-react';
+import { X, Package, Clock, ChefHat, Bike, CheckCircle, Star, Loader2, Gift, TrendingUp, Plus, Minus } from 'lucide-react';
 import { API_URL } from '@/lib/socket';
 import { getSocket } from '@/lib/socket';
 
@@ -18,11 +18,19 @@ interface Pedido {
     calificacion_comentario: string | null;
 }
 
+interface PuntosMovimiento {
+    puntos: number;
+    motivo: string;
+    descripcion: string | null;
+    created_at: string;
+}
+
 interface Props {
     open: boolean;
     onClose: () => void;
     token: string;
     telefono: string;
+    initialTab?: 'pedidos' | 'puntos';
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: React.ReactNode; step: number }> = {
@@ -121,10 +129,22 @@ function StarRating({ orderId, token, onDone }: { orderId: string; token: string
     );
 }
 
-export default function MisPedidosModal({ open, onClose, token, telefono }: Props) {
+const MOTIVO_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode; signo: '+' | '-' }> = {
+    registro:   { label: 'Bienvenida',     color: 'text-emerald-600 bg-emerald-50', icon: <Gift size={14} />,       signo: '+' },
+    pedido:     { label: 'Pedido',         color: 'text-blue-600 bg-blue-50',      icon: <Package size={14} />,    signo: '+' },
+    promocion:  { label: 'Promoción',      color: 'text-purple-600 bg-purple-50',  icon: <Star size={14} />,       signo: '+' },
+    canje:      { label: 'Canje',          color: 'text-amber-600 bg-amber-50',    icon: <TrendingUp size={14} />, signo: '-' },
+    ajuste:     { label: 'Ajuste',         color: 'text-slate-600 bg-slate-100',   icon: <TrendingUp size={14} />, signo: '+' },
+};
+
+export default function MisPedidosModal({ open, onClose, token, telefono, initialTab = 'pedidos' }: Props) {
+    const [activeTab, setActiveTab] = useState<'pedidos' | 'puntos'>(initialTab);
     const [pedidos, setPedidos] = useState<Pedido[]>([]);
     const [loading, setLoading] = useState(true);
     const [ratingOrderId, setRatingOrderId] = useState<string | null>(null);
+    const [puntosBalance, setPuntosBalance] = useState(0);
+    const [puntosHistorial, setPuntosHistorial] = useState<PuntosMovimiento[]>([]);
+    const [puntosLoading, setPuntosLoading] = useState(false);
 
     const fetchPedidos = async () => {
         try {
@@ -138,10 +158,26 @@ export default function MisPedidosModal({ open, onClose, token, telefono }: Prop
         } catch { } finally { setLoading(false); }
     };
 
+    const fetchPuntos = async () => {
+        setPuntosLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/api/clientes/puntos`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setPuntosBalance(data.puntos);
+                setPuntosHistorial(data.historial);
+            }
+        } catch { } finally { setPuntosLoading(false); }
+    };
+
     useEffect(() => {
         if (!open) return;
+        setActiveTab(initialTab);
         setLoading(true);
         fetchPedidos();
+        fetchPuntos();
 
         const socket = getSocket();
         if (!socket) return;
@@ -172,18 +208,103 @@ export default function MisPedidosModal({ open, onClose, token, telefono }: Prop
                         className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
 
                         {/* Header */}
-                        <div className="bg-[#0f172a] px-7 py-6 flex items-center justify-between shrink-0">
-                            <div>
-                                <h2 className="text-white font-black italic text-xl uppercase tracking-tight">Mis Pedidos</h2>
-                                <p className="text-white/40 text-xs font-bold">Historial y seguimiento en tiempo real</p>
+                        <div className="bg-[#0f172a] px-7 py-6 shrink-0">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h2 className="text-white font-black italic text-xl uppercase tracking-tight">
+                                        {activeTab === 'pedidos' ? 'Mis Pedidos' : 'Mis Puntos'}
+                                    </h2>
+                                    <p className="text-white/40 text-xs font-bold">
+                                        {activeTab === 'pedidos' ? 'Historial y seguimiento en tiempo real' : 'Programa de lealtad Capriccio'}
+                                    </p>
+                                </div>
+                                <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white/60 hover:bg-white/20 transition-all">
+                                    <X size={18} />
+                                </button>
                             </div>
-                            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white/60 hover:bg-white/20 transition-all">
-                                <X size={18} />
-                            </button>
+                            {/* Tabs */}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setActiveTab('pedidos')}
+                                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all ${activeTab === 'pedidos' ? 'bg-[#d4a017] text-[#0f172a]' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
+                                >
+                                    <Package size={12} /> Pedidos
+                                </button>
+                                <button
+                                    onClick={() => { setActiveTab('puntos'); fetchPuntos(); }}
+                                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all ${activeTab === 'puntos' ? 'bg-[#d4a017] text-[#0f172a]' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
+                                >
+                                    <Star size={12} /> Puntos
+                                </button>
+                            </div>
                         </div>
 
                         {/* Content */}
                         <div className="overflow-y-auto flex-1 p-4 space-y-4">
+
+                        {/* ── TAB: PUNTOS ── */}
+                        {activeTab === 'puntos' && (
+                            <>
+                                {puntosLoading ? (
+                                    <div className="py-20 flex flex-col items-center gap-3 text-slate-400">
+                                        <Loader2 size={32} className="animate-spin" />
+                                        <p className="font-bold text-sm">Cargando puntos...</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Tarjeta de saldo */}
+                                        <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl p-5 relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4a017]/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                                            <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-1">Saldo actual</p>
+                                            <div className="flex items-end gap-2 mb-3">
+                                                <span className="text-[#d4a017] font-black text-5xl leading-none">{puntosBalance}</span>
+                                                <span className="text-white/50 font-bold mb-1">puntos</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <Star size={11} className="text-[#d4a017]" fill="currentColor" />
+                                                <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest">Programa de lealtad Capriccio</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Historial */}
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Movimientos</p>
+                                            {puntosHistorial.length === 0 ? (
+                                                <div className="py-10 text-center text-slate-300">
+                                                    <Gift size={36} className="mx-auto mb-2 opacity-30" />
+                                                    <p className="font-black italic uppercase text-sm">Sin movimientos aún</p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {puntosHistorial.map((mov, i) => {
+                                                        const cfg = MOTIVO_CONFIG[mov.motivo] || MOTIVO_CONFIG['ajuste'];
+                                                        const esPositivo = mov.puntos > 0;
+                                                        return (
+                                                            <div key={i} className="flex items-center gap-3 bg-white rounded-2xl border border-slate-100 p-3">
+                                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${cfg.color}`}>
+                                                                    {cfg.icon}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="font-black text-[#0f172a] text-xs truncate">{mov.descripcion || cfg.label}</p>
+                                                                    <p className="text-[10px] text-slate-400 font-bold">{formatDate(mov.created_at)}</p>
+                                                                </div>
+                                                                <div className={`flex items-center gap-0.5 font-black text-sm shrink-0 ${esPositivo ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                    {esPositivo ? <Plus size={12} strokeWidth={3} /> : <Minus size={12} strokeWidth={3} />}
+                                                                    {Math.abs(mov.puntos)} pts
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </>
+                        )}
+
+                        {/* ── TAB: PEDIDOS ── */}
+                        {activeTab === 'pedidos' && <>
                             {loading && (
                                 <div className="py-20 flex flex-col items-center gap-3 text-slate-400">
                                     <Loader2 size={32} className="animate-spin" />
@@ -250,6 +371,7 @@ export default function MisPedidosModal({ open, onClose, token, telefono }: Prop
                                     </div>
                                 );
                             })}
+                        </>}
                         </div>
                     </motion.div>
                 </div>

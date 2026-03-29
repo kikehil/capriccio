@@ -642,7 +642,14 @@ app.get('/api/admin/dashboard', adminOnly, async (req, res) => {
             )
         `, [today]);
 
-        // 5. Top repartidores: eficiencia (asignado_at → delivered_at), pedidos hoy y semana
+        // 5. Clientes registrados (total y nuevos hoy)
+        const clientesStats = await db.query(`
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN date(created_at) = $1 THEN 1 ELSE 0 END) as nuevos_hoy
+            FROM clientes WHERE verificado = 1
+        `, [today]);
+
+        // 6. Top repartidores: eficiencia (asignado_at → delivered_at), pedidos hoy y semana
         const topRepartidores = await db.query(`
             SELECT repartidor,
                    ROUND(AVG((julianday(delivered_at) - julianday(asignado_at)) * 24 * 60), 1) as avg_minutos,
@@ -669,6 +676,10 @@ app.get('/api/admin/dashboard', adminOnly, async (req, res) => {
             entrega: {
                 promedioMinutos: Number(avgEntrega.rows[0]?.promedio_minutos || 0),
                 totalEntregados: Number(avgEntrega.rows[0]?.total_entregados || 0),
+            },
+            clientes: {
+                total: Number(clientesStats.rows[0]?.total || 0),
+                nuevosHoy: Number(clientesStats.rows[0]?.nuevos_hoy || 0),
             },
             topRepartidores: topRepartidores.rows
         });
@@ -839,6 +850,20 @@ io.on('connection', (socket) => {
     `);
     console.log('✅ Tabla clientes lista');
 
+    // Tabla historial de puntos
+    await dbConn.run(`
+        CREATE TABLE IF NOT EXISTS puntos_historial (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_id INTEGER NOT NULL,
+            puntos INTEGER NOT NULL,
+            motivo TEXT NOT NULL,
+            descripcion TEXT,
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+        )
+    `);
+    console.log('✅ Tabla puntos_historial lista');
+
     // Add columns if not exist (SQLite ALTER TABLE IF NOT EXISTS workaround)
     const dbConn2 = await db.dbPromise;
     const pedidosCols = await dbConn2.all("PRAGMA table_info(pedidos)");
@@ -848,6 +873,18 @@ io.on('connection', (socket) => {
     if (!colNames.includes('calificacion_comentario')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN calificacion_comentario TEXT");
     console.log('✅ Columnas tracking listas');
 })();
+
+// ─── LOYALTY HELPERS ─────────────────────────────────────────────────────────
+async function agregarPuntos(clienteId, puntos, motivo, descripcion = null) {
+    await db.query(
+        'UPDATE clientes SET puntos = MAX(0, puntos + $1) WHERE id = $2',
+        [puntos, clienteId]
+    );
+    await db.query(
+        'INSERT INTO puntos_historial (cliente_id, puntos, motivo, descripcion) VALUES ($1,$2,$3,$4)',
+        [clienteId, puntos, motivo, descripcion]
+    );
+}
 
 // Helper: generar código alfanumérico
 function generarCodigo(len = 6) {
@@ -1009,8 +1046,12 @@ app.post('/api/clientes/verificar', async (req, res) => {
 
         await db.query('UPDATE clientes SET verificado=1, codigo_verificacion=NULL, codigo_expira=NULL WHERE telefono=$1', [telefono]);
 
+        // 🎁 +30 puntos de bienvenida al registrarse
+        await agregarPuntos(cliente.id, 30, 'registro', '¡Bienvenido al programa de lealtad Capriccio!');
+        const puntosFinales = (cliente.puntos || 0) + 30;
+
         const token = jwt.sign({ id: cliente.id, telefono: cliente.telefono, nombre: cliente.nombre, type: 'cliente' }, CLIENTE_JWT_SECRET, { expiresIn: '30d' });
-        res.json({ ok: true, token, nombre: cliente.nombre, telefono: cliente.telefono, puntos: cliente.puntos || 0 });
+        res.json({ ok: true, token, nombre: cliente.nombre, telefono: cliente.telefono, puntos: puntosFinales, nuevo: true });
     } catch (e) {
         console.error('[verificar]', e);
         res.status(500).json({ error: 'Error al verificar' });
@@ -1037,6 +1078,25 @@ app.post('/api/clientes/login', async (req, res) => {
     } catch (e) {
         console.error('[login cliente]', e);
         res.status(500).json({ error: 'Error al iniciar sesión' });
+    }
+});
+
+// GET /api/clientes/puntos — historial de puntos del cliente autenticado
+app.get('/api/clientes/puntos', authenticateCliente, async (req, res) => {
+    try {
+        const clienteRes = await db.query('SELECT puntos FROM clientes WHERE id = $1', [req.cliente.id]);
+        const historialRes = await db.query(
+            `SELECT puntos, motivo, descripcion, created_at
+             FROM puntos_historial
+             WHERE cliente_id = $1
+             ORDER BY created_at DESC
+             LIMIT 30`,
+            [req.cliente.id]
+        );
+        res.json({ puntos: clienteRes.rows[0]?.puntos || 0, historial: historialRes.rows });
+    } catch (e) {
+        console.error('[puntos]', e);
+        res.status(500).json({ error: 'Error al obtener puntos' });
     }
 });
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { API_URL } from '@/lib/socket';
-import { TrendingUp, ShoppingBag, CheckCircle, Clock, Bike, Package, RefreshCcw } from 'lucide-react';
+import { TrendingUp, ShoppingBag, CheckCircle, Clock, Bike, Package, RefreshCcw, Users } from 'lucide-react';
 
 interface DashboardData {
     tarjetas: {
@@ -15,6 +15,7 @@ interface DashboardData {
     semanal: { dia: string; ventas: number; pedidos: number }[];
     topProductos: { nombre: string; total_pedidos: number; total_venta: number }[];
     entrega: { promedioMinutos: number; totalEntregados: number };
+    clientes: { total: number; nuevosHoy: number };
     topRepartidores: { repartidor: string; avg_minutos: number; pedidos_hoy: number; pedidos_semana: number }[];
 }
 
@@ -98,7 +99,7 @@ export default function CapriccioDashboard() {
 
     if (!data) return <p className="text-slate-400 text-center">Error cargando datos.</p>;
 
-    const { tarjetas, semanal, entrega, topRepartidores } = data;
+    const { tarjetas, semanal, entrega, clientes, topRepartidores } = data;
 
     // Build full 7-day chart (fill missing days with 0)
     const chartDays: { dia: string; ventas: number; pedidos: number }[] = [];
@@ -175,6 +176,15 @@ export default function CapriccioDashboard() {
                     <div className="mt-2 flex items-center gap-2">
                         <div className="h-1.5 rounded-full bg-capriccio-gold flex-1" style={{ width: `${Math.min(tarjetas.recibidosCantidad * 10, 100)}%` }} />
                     </div>
+                </div>
+
+                <div className="bg-white p-7 rounded-[2.5rem] shadow-xl border border-slate-100 group">
+                    <Users size={20} className="mb-3 text-capriccio-gold" />
+                    <p className="text-[10px] uppercase font-black tracking-[0.25em] text-slate-400 mb-1">Clientes Registrados</p>
+                    <h4 className="text-5xl font-black italic leading-none text-slate-900">{(clientes?.total ?? 0).toLocaleString()}</h4>
+                    <p className="text-xs font-bold text-emerald-600 mt-2">
+                        {clientes?.nuevosHoy ? `+${clientes.nuevosHoy} nuevos hoy` : 'Sin nuevos hoy'}
+                    </p>
                 </div>
             </div>
 
