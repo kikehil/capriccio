@@ -7,6 +7,14 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const fs = require('fs');
+const webpush = require('web-push');
+
+// ─── VAPID config ─────────────────────────────────────────────────────────────
+webpush.setVapidDetails(
+    process.env.VAPID_EMAIL || 'mailto:admin@capricciopizzeria.com',
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+);
 
 const app = express();
 app.use(cors());
@@ -486,13 +494,54 @@ app.patch('/api/pedidos/:id/status', staffOnly, async (req, res) => {
         } else {
             io.emit('pedido_entregado_remoto', pedido);
         }
-        // Emit tracking event for customer
+        // Emit tracking event for customer (socket en tiempo real)
         io.emit('pedido_tracking_update', {
             order_id: id,
             status: status,
             repartidor: repartidor || null,
             telefono_cliente: updatedOrder.telefono_cliente || null
         });
+
+        // 🔔 Push notification al cliente según el estado
+        const telefono = updatedOrder.telefono_cliente;
+        if (telefono) {
+            const shortId = id.split('-')[1] || id.slice(-4).toUpperCase();
+            const pushMap = {
+                en_preparacion: {
+                    title: '👨‍🍳 ¡Tu pizza está en el horno!',
+                    body: `Pedido #${shortId} — Estamos preparando tu orden con todo el sabor Capriccio.`,
+                    url: '/?open=pedidos',
+                    tag: `pedido-${id}`,
+                },
+                listo: {
+                    title: '🛵 ¡Ya va en camino!',
+                    body: `Pedido #${shortId} — ${repartidor && repartidor !== 'S/A' ? repartidor + ' lleva' : 'Tu repartidor lleva'} tu pizza. ¡Prepara el hambre!`,
+                    url: '/?open=pedidos',
+                    tag: `pedido-${id}`,
+                },
+                entregado: {
+                    title: '🍕 ¡Buen provecho!',
+                    body: `Pedido #${shortId} entregado. ¿Qué tal estuvo? Califica tu experiencia.`,
+                    url: '/?open=pedidos',
+                    tag: `pedido-${id}`,
+                },
+                cancelado: {
+                    title: '❌ Pedido cancelado',
+                    body: `Tu pedido #${shortId} fue cancelado. Llámanos al 846-123-4567 si tienes dudas.`,
+                    url: '/',
+                    tag: `pedido-${id}`,
+                },
+            };
+            const pushData = pushMap[status];
+            if (pushData) {
+                sendPushToCliente(telefono, {
+                    ...pushData,
+                    icon: '/icons/icon-192x192.png',
+                    badge: '/icons/icon-72x72.png',
+                });
+            }
+        }
+
         res.json({ success: true, pedido });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -864,6 +913,20 @@ io.on('connection', (socket) => {
     `);
     console.log('✅ Tabla puntos_historial lista');
 
+    // Tabla suscripciones push
+    await dbConn.run(`
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_id INTEGER,
+            endpoint TEXT UNIQUE NOT NULL,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+        )
+    `);
+    console.log('✅ Tabla push_subscriptions lista');
+
     // Add columns if not exist (SQLite ALTER TABLE IF NOT EXISTS workaround)
     const dbConn2 = await db.dbPromise;
     const pedidosCols = await dbConn2.all("PRAGMA table_info(pedidos)");
@@ -873,6 +936,58 @@ io.on('connection', (socket) => {
     if (!colNames.includes('calificacion_comentario')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN calificacion_comentario TEXT");
     console.log('✅ Columnas tracking listas');
 })();
+
+// ─── PUSH NOTIFICATION HELPERS ────────────────────────────────────────────────
+
+// Enviar push a todas las suscripciones de un cliente (por telefono o cliente_id)
+async function sendPushToCliente(clienteIdOrTel, payload) {
+    try {
+        // Buscar cliente_id si se pasa teléfono
+        let clienteId = clienteIdOrTel;
+        if (typeof clienteIdOrTel === 'string' && isNaN(clienteIdOrTel)) {
+            const r = await db.query('SELECT id FROM clientes WHERE telefono = $1', [clienteIdOrTel]);
+            if (!r.rows.length) return;
+            clienteId = r.rows[0].id;
+        }
+        const subs = await db.query(
+            'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE cliente_id = $1',
+            [clienteId]
+        );
+        const msg = JSON.stringify(payload);
+        for (const sub of subs.rows) {
+            try {
+                await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, msg);
+            } catch (e) {
+                // Suscripción expirada → limpiar
+                if (e.statusCode === 410 || e.statusCode === 404) {
+                    await db.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[push]', e.message);
+    }
+}
+
+// Enviar push a TODOS los clientes suscritos (para promos masivas)
+async function sendPushToAll(payload) {
+    try {
+        const subs = await db.query('SELECT endpoint, p256dh, auth FROM push_subscriptions');
+        const msg = JSON.stringify(payload);
+        for (const sub of subs.rows) {
+            try {
+                await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, msg);
+            } catch (e) {
+                if (e.statusCode === 410 || e.statusCode === 404) {
+                    await db.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
+                }
+            }
+        }
+        console.log(`[push-all] Enviado a ${subs.rows.length} suscripciones`);
+    } catch (e) {
+        console.error('[push-all]', e.message);
+    }
+}
 
 // ─── LOYALTY HELPERS ─────────────────────────────────────────────────────────
 async function agregarPuntos(clienteId, puntos, motivo, descripcion = null) {
@@ -1079,6 +1194,47 @@ app.post('/api/clientes/login', async (req, res) => {
         console.error('[login cliente]', e);
         res.status(500).json({ error: 'Error al iniciar sesión' });
     }
+});
+
+// ─── PUSH ENDPOINTS ──────────────────────────────────────────────────────────
+
+// POST /api/push/subscribe — guardar suscripción del cliente
+app.post('/api/push/subscribe', authenticateCliente, async (req, res) => {
+    const { endpoint, p256dh, auth } = req.body;
+    if (!endpoint || !p256dh || !auth) return res.status(400).json({ error: 'Datos de suscripción incompletos' });
+    try {
+        await db.query(
+            `INSERT INTO push_subscriptions (cliente_id, endpoint, p256dh, auth)
+             VALUES ($1,$2,$3,$4)
+             ON CONFLICT(endpoint) DO UPDATE SET cliente_id=$1, p256dh=$3, auth=$4`,
+            [req.cliente.id, endpoint, p256dh, auth]
+        );
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Error al guardar suscripción' });
+    }
+});
+
+// DELETE /api/push/unsubscribe — eliminar suscripción
+app.delete('/api/push/unsubscribe', authenticateCliente, async (req, res) => {
+    const { endpoint } = req.body;
+    await db.query('DELETE FROM push_subscriptions WHERE endpoint=$1 AND cliente_id=$2', [endpoint, req.cliente.id]);
+    res.json({ ok: true });
+});
+
+// POST /api/push/promo — enviar notificación masiva (solo admin)
+app.post('/api/push/promo', adminOnly, async (req, res) => {
+    const { titulo, cuerpo, url } = req.body;
+    if (!titulo || !cuerpo) return res.status(400).json({ error: 'Título y cuerpo requeridos' });
+    await sendPushToAll({
+        title: titulo,
+        body: cuerpo,
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-72x72.png',
+        url: url || '/',
+        tag: 'promo-' + Date.now(),
+    });
+    res.json({ ok: true, mensaje: 'Notificación enviada a todos los suscriptores' });
 });
 
 // GET /api/clientes/puntos — historial de puntos del cliente autenticado

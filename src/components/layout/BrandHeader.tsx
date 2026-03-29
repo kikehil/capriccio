@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, LogIn, LogOut, Star, Package, Phone, X, Gift } from 'lucide-react';
+import PushSubscription from '@/components/layout/PushSubscription';
 import { cn } from '@/lib/utils';
 import CustomerAuthModal from '@/components/customer/CustomerAuthModal';
 import MisPedidosModal from '@/components/customer/MisPedidosModal';
@@ -158,6 +159,9 @@ const BrandHeader = () => {
                                                 <Gift size={15} className="text-[#d4a017]" />
                                                 Mis Puntos
                                             </button>
+                                            <div className="px-2 py-2 border-b border-slate-100">
+                                                <PushSubscription token={cliente.token} />
+                                            </div>
                                             <button
                                                 onClick={handleLogout}
                                                 className="w-full flex items-center gap-3 px-4 py-3.5 text-red-500 hover:bg-red-50 font-black text-xs uppercase tracking-wider transition-colors"
@@ -173,6 +177,9 @@ const BrandHeader = () => {
                     </div>
                 </div>
             </header>
+
+            {/* Banner push (aparece en la parte superior si no ha aceptado) */}
+            {cliente && <PushSubscription token={cliente.token} />}
 
             <CustomerAuthModal
                 open={showAuth}
