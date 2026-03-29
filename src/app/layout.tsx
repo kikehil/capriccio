@@ -79,9 +79,9 @@ export const metadata: Metadata = {
       { url: "/img/capriccio-logo.png", sizes: "192x192", type: "image/png" },
     ],
     apple: [
-      { url: "/img/capriccio-logo.png", sizes: "120x120", type: "image/png" },
-      { url: "/img/capriccio-logo.png", sizes: "152x152", type: "image/png" },
-      { url: "/img/capriccio-logo.png", sizes: "180x180", type: "image/png" },
+      { url: "/icons/icon-128x128.png", sizes: "120x120", type: "image/png" },
+      { url: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
+      { url: "/icons/icon-192x192.png", sizes: "180x180", type: "image/png" },
     ],
   },
 };
