@@ -9,7 +9,7 @@ const withPWA = withPWAInit({
   reloadOnOnline: true,
   // Cambia a false para probar la PWA en local (npm run build && npm start)
   disable: process.env.NODE_ENV === "development",
-  fallbackRoutes: {
+  fallbacks: {
     document: "/offline",
   },
   workboxOptions: {
