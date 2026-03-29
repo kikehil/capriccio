@@ -410,7 +410,7 @@ return (
           <h4 className="text-xs font-black uppercase tracking-[0.3em] text-slate-500 mb-8">Ubicación</h4>
           <p className="font-bold text-white uppercase italic">Pánuco, Veracruz, México</p>
           <p className="text-slate-500 text-[10px] font-bold mt-1">Sabor artesanal directo a tu puerta.</p>
-          <p className="text-capriccio-gold font-bold mt-2 underline decoration-2 underline-offset-4 cursor-pointer hover:text-yellow-400 transition-colors">Ver en Mapa</p>
+          <a href="https://maps.app.goo.gl/bDTf52FA1bJgxnUt5" target="_blank" rel="noopener noreferrer" className="text-capriccio-gold font-bold mt-2 underline decoration-2 underline-offset-4 hover:text-yellow-400 transition-colors inline-block">Ver en Mapa</a>
         </div>
       </div>
       <div className="container mx-auto px-6 mt-20 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-600 text-xs font-bold uppercase tracking-widest">
