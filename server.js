@@ -1242,6 +1242,16 @@ app.post('/api/push/promo', adminOnly, async (req, res) => {
     res.json({ ok: true, mensaje: 'Notificación enviada a todos los suscriptores' });
 });
 
+// GET /api/push/stats — total suscriptores (solo admin/marketing)
+app.get('/api/push/stats', adminPanelAccess, async (req, res) => {
+    try {
+        const r = await db.query('SELECT COUNT(*) as total FROM push_subscriptions');
+        res.json({ total: Number(r.rows[0]?.total || 0) });
+    } catch (e) {
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
 // GET /api/clientes/puntos — historial de puntos del cliente autenticado
 app.get('/api/clientes/puntos', authenticateCliente, async (req, res) => {
     try {

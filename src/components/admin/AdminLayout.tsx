@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Package, Flame, BarChart3, Settings, LayoutDashboard, Menu, X, FileText, Users, DollarSign, LogOut, TrendingUp } from 'lucide-react';
+import { Package, Flame, BarChart3, Settings, LayoutDashboard, Menu, X, FileText, Users, DollarSign, LogOut, TrendingUp, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
-    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform' | 'dashboard';
+    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform' | 'dashboard' | 'notifications';
     setActiveTab: (tab: any) => void;
     plan?: string;
 }
@@ -22,6 +22,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
         { id: 'users', label: 'Usuarios', icon: Users },
         { id: 'reports', label: 'Reportes', icon: FileText },
         { id: 'promos', label: 'Promociones', icon: Flame },
+        { id: 'notifications', label: 'Notificaciones', icon: Bell },
         { id: 'settings', label: 'Configuración', icon: Settings },
         { id: 'platform', label: 'Plataforma', icon: LayoutDashboard, super_only: true },
     ].filter(item => {
@@ -47,11 +48,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
         // 4. ROL RESPONSABLE — solo ve Pedidos
         if (userRole === 'responsable') return item.id === 'stats';
 
-        // 5. ROL MARKETING — solo Productos y Promociones
-        if (userRole === 'marketing') return ['products', 'promos'].includes(item.id);
+        // 5. ROL MARKETING — Productos, Promociones y Notificaciones
+        if (userRole === 'marketing') return ['products', 'promos', 'notifications'].includes(item.id);
 
         // 6. ADMIN NORMAL — filtro por plan
-        if (plan === 'basico') return ['stats', 'products', 'promos'].includes(item.id);
+        if (plan === 'basico') return ['stats', 'products', 'promos', 'notifications'].includes(item.id);
 
         return true;
     });
