@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { LogIn } from 'lucide-react';
+import { API_URL } from '@/lib/socket';
 
 interface CajaLoginProps {
   onLoginSuccess: (token: string) => void;
@@ -19,7 +20,7 @@ const CajaLogin: React.FC<CajaLoginProps> = ({ onLoginSuccess }) => {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

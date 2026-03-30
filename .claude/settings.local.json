@@ -4,7 +4,13 @@
       "Bash(npx tsc:*)",
       "Bash(node init-db.js)",
       "Bash(npm run:*)",
-      "Bash(pkill -f \"next build\")"
+      "Bash(pkill -f \"next build\")",
+      "Bash(cd /d D:WEBpizzaOK)",
+      "Bash(sqlite3 src/database.sqlite \"SELECT id, username, role FROM usuarios WHERE username=''caja'';\")",
+      "Bash(node -e \":*)",
+      "Bash(find D:WEBpizzaOKsrcappapi -name *.ts -o -name *.js)",
+      "Bash(ls -la \"D:\\\\WEB\\\\pizzaOK\\\\src\\\\app\\\\api\"\" 2>&1 || echo \"No api directory \")",
+      "Bash(curl -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"username\"\"\"\":\"\"\"\"caja\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"CapriccioAdmin2026!\"\"\"\",\"\"\"\"role_request\"\"\"\":\"\"\"\"caja\"\"\"\"}')"
     ]
   }
 }
