@@ -416,13 +416,17 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
         [...arr].sort((a, b) => parseDate(a.created_at) - parseDate(b.created_at));
 
     const domicilioOrders = sortByOldest(orders.filter(o =>
-        o.metodo_entrega === 'domicilio' ||
-        (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal')
+        !o.liquidado && (
+            o.metodo_entrega === 'domicilio' ||
+            (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal')
+        )
     ));
 
     const sucursalOrders = sortByOldest(orders.filter(o =>
-        o.metodo_entrega === 'sucursal' ||
-        o.direccion === 'Recoger en sucursal'
+        !o.liquidado && (
+            o.metodo_entrega === 'sucursal' ||
+            o.direccion === 'Recoger en sucursal'
+        )
     ));
 
     return (
