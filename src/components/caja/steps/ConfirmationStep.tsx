@@ -176,7 +176,9 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
     doc.setFontSize(9);
     doc.text('¡GRACIAS POR SU COMPRA!', 40, yPos, { align: 'center' });
 
-    // Descargar
+    // Imprimir directamente sin diálogo
+    doc.print();
+    // También descargar como respaldo
     doc.save(`recibo-${orderData.order_id}.pdf`);
   };
 

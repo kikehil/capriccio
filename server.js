@@ -1537,6 +1537,19 @@ app.post('/api/caja/pedidos', authorize(['admin', 'caja', 'responsable']), async
             );
         }
 
+        // 📱 Enviar notificación push al cliente
+        if (telefono) {
+            const shortId = order_id.split('-')[1] || order_id.slice(-4).toUpperCase();
+            sendPushToCliente(telefono, {
+                title: '🍕 ¡Pedido Confirmado en Capriccio!',
+                body: `Tu orden #${shortId} fue recibida. Estamos preparando tu pizza con todo el sabor.`,
+                url: '/?open=pedidos',
+                tag: `pedido-${order_id}`,
+                icon: '/icons/icon-192x192.png',
+                badge: '/icons/icon-72x72.png',
+            });
+        }
+
         // Emitir evento Socket para Kitchen Display
         io.emit('nuevo_pedido_caja', {
             pedido: pedidoResult.rows[0],
