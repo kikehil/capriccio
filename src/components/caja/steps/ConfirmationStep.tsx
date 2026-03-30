@@ -229,7 +229,7 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
           <p className="text-xs text-gray-600 mt-1">{new Date().toLocaleString('es-CL')}</p>
         </div>
 
-      <div className="space-y-3">
+        <div className="space-y-3">
         {/* CLIENTE */}
         <div className="bg-white p-3 rounded border border-gray-200">
           <h3 className="font-bold text-gray-800 mb-3">Cliente</h3>
@@ -313,6 +313,7 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
             )}
           </div>
         </div>
+      </div>
       </div>
 
       {/* BUTTON */}

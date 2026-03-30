@@ -15,7 +15,8 @@
       "Bash(curl -s http://localhost:3000/caja)",
       "mcp__Claude_Preview__preview_start",
       "Bash(grep -n \"input\" src/components/caja/steps/*.tsx)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
