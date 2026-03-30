@@ -445,13 +445,14 @@ app.post('/api/pedidos', async (req, res) => {
         }
 
         await connection.commit();
-        io.emit('nuevo_pedido', { 
-            cliente_nombre, 
-            telefono, 
-            direccion, 
-            order_id: orderId, 
-            total: validatedTotal, 
+        io.emit('nuevo_pedido', {
+            cliente_nombre,
+            telefono,
+            direccion,
+            order_id: orderId,
+            total: validatedTotal,
             status: 'pendiente',
+            metodo_entrega: metodo_entrega || 'domicilio',
             items: validatedItems,
             created_at: new Date().toISOString()
         });
