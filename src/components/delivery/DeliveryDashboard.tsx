@@ -21,6 +21,7 @@ interface DeliveryOrder {
     order_id: string;
     createdAt?: string;
     repartidor?: string;
+    status?: string;
 }
 
 const DeliveryDashboard = () => {
@@ -47,8 +48,9 @@ const DeliveryDashboard = () => {
             const data = await res.json();
 
             if (Array.isArray(data)) {
-                const listos = data
-                    .filter(p => p.status === 'listo')
+                // Mostrar pedidos "listo" (sin asignar) y "en_reparto" (asignados)
+                const relevantes = data
+                    .filter(p => p.status === 'listo' || p.status === 'en_reparto' || p.status === 'despachado')
                     .map(p => ({
                         ...p,
                         order_id: p.order_id || p.id,
@@ -57,7 +59,7 @@ const DeliveryDashboard = () => {
                     }))
                     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
-                setPedidosListos(listos);
+                setPedidosListos(relevantes);
             }
             setIsLoaded(true);
         } catch (e) {
@@ -95,6 +97,9 @@ const DeliveryDashboard = () => {
         const handleConnect = () => {
             setSocketConnected(true);
             if (repartidorName) socket.emit('registro_repartidor', repartidorName);
+            // Re-fetch on reconnect (missed events while disconnected)
+            console.log("🔄 [Repartidor] Socket reconectado — refrescando pedidos");
+            fetchInitialOrders();
         };
         const handleDisconnect = () => setSocketConnected(false);
 
@@ -114,21 +119,58 @@ const DeliveryDashboard = () => {
             if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
         };
 
-        const handleEntregadoRemoto = (id: string) => {
-            setPedidosListos(prev => prev.filter(p => p.id !== id));
+        const handleEntregadoRemoto = (pedido: any) => {
+            const remoteId = pedido?.order_id || pedido?.id || pedido;
+            setPedidosListos(prev => prev.filter(p => p.id !== remoteId));
+        };
+
+        // Actualización de status en tiempo real (ej: otro repartidor toma un pedido)
+        const handleStatusUpdate = (pedido: any) => {
+            if (!pedido?.order_id) return;
+            const oid = pedido.order_id;
+            if (pedido.status === 'en_reparto') {
+                setPedidosListos(prev => prev.map(p =>
+                    p.id === oid ? { ...p, status: 'en_reparto', repartidor: pedido.repartidor } : p
+                ));
+            } else if (pedido.status === 'entregado') {
+                setPedidosListos(prev => prev.filter(p => p.id !== oid));
+            }
         };
 
         socket.on('connect', handleConnect);
         socket.on('disconnect', handleDisconnect);
         socket.on('pedido_listo_reparto', handlePedidoListo);
         socket.on('pedido_entregado_remoto', handleEntregadoRemoto);
+        socket.on('pedido_status_update', handleStatusUpdate);
 
         return () => {
             socket.off('connect', handleConnect);
             socket.off('disconnect', handleDisconnect);
             socket.off('pedido_listo_reparto', handlePedidoListo);
             socket.off('pedido_entregado_remoto', handleEntregadoRemoto);
+            socket.off('pedido_status_update', handleStatusUpdate);
         };
+    }, [repartidorName]);
+
+    // Re-sync cuando la pantalla vuelve a estar visible (tablet/móvil)
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                console.log("👁️ [Repartidor] Pantalla visible — refrescando pedidos");
+                fetchInitialOrders();
+                // Reconectar socket si se desconectó
+                const socket = getSocket();
+                if (socket && !socket.connected) {
+                    socket.connect();
+                }
+                // Re-registrar repartidor
+                if (repartidorName && socket?.connected) {
+                    socket.emit('registro_repartidor', repartidorName);
+                }
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
     }, [repartidorName]);
 
     const handleLogin = (e: React.FormEvent) => {
@@ -143,6 +185,35 @@ const DeliveryDashboard = () => {
     const handleLogout = () => {
         localStorage.removeItem('capriccio_repartidor_nombre');
         setRepartidorName(null);
+    };
+
+    const autoAsignar = async (id: string) => {
+        const order = pedidosListos.find(p => p.id === id);
+        if (!order) return;
+        try {
+            const token = localStorage.getItem('capriccio_token_repartidor');
+            const res = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    status: 'en_reparto',
+                    repartidor: repartidorName
+                })
+            });
+            if (res.ok) {
+                // Actualizar localmente
+                setPedidosListos(prev => prev.map(p =>
+                    p.id === id ? { ...p, status: 'en_reparto', repartidor: repartidorName || '' } : p
+                ));
+                if ("vibrate" in navigator) navigator.vibrate([100, 50, 100]);
+            }
+        } catch (error) {
+            console.error("Error al auto-asignar:", error);
+            alert("Error de conexión con el servidor.");
+        }
     };
 
     const marcarEntregado = async (id: string) => {
@@ -195,9 +266,18 @@ const DeliveryDashboard = () => {
         setIsMapOpen(true);
     };
 
-    // Filtrar pedidos: Los del repartidor actual primero
-    const misPedidos = pedidosListos.filter(p => p.repartidor === repartidorName);
-    const otrosPedidos = pedidosListos.filter(p => p.repartidor !== repartidorName);
+    // Mis pedidos en reparto (asignados a mí)
+    const misEnReparto = pedidosListos.filter(p =>
+        (p.status === 'en_reparto' || p.status === 'despachado') && p.repartidor === repartidorName
+    );
+    // Pedidos listos disponibles para tomar
+    const disponibles = pedidosListos.filter(p =>
+        p.status === 'listo' && (!p.repartidor || p.repartidor === 'S/A' || p.repartidor === '')
+    );
+    // Pedidos de otros repartidores (solo info)
+    const deOtros = pedidosListos.filter(p =>
+        (p.status === 'en_reparto' || p.status === 'despachado') && p.repartidor && p.repartidor !== repartidorName
+    );
 
     if (!repartidorName) {
         return (
@@ -256,29 +336,45 @@ const DeliveryDashboard = () => {
             </header>
 
             <main className="p-4 space-y-6 mt-4">
-                {/* Mis Pedidos Asignados */}
-                {misPedidos.length > 0 && (
+                {/* Mis Pedidos en Reparto */}
+                {misEnReparto.length > 0 && (
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 ml-4">
                             <Sparkles size={16} className="text-capriccio-gold" />
-                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 italic">Mis Asignaciones</h3>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 italic">En Reparto — Mis Entregas ({misEnReparto.length})</h3>
                         </div>
                         <AnimatePresence mode="popLayout">
-                            {misPedidos.map((pedido) => (
-                                <OrderCardView key={pedido.id} pedido={pedido} isOwn onDeliver={marcarEntregado} onMap={handleOpenMap} />
+                            {misEnReparto.map((pedido) => (
+                                <OrderCardView key={pedido.id} pedido={pedido} mode="en_reparto" onDeliver={marcarEntregado} onMap={handleOpenMap} onAssign={autoAsignar} />
                             ))}
                         </AnimatePresence>
                     </div>
                 )}
 
-                {/* Otros Pedidos (Sin asignar o para otros) */}
-                {otrosPedidos.length > 0 && (
+                {/* Pedidos listos para tomar */}
+                {disponibles.length > 0 && (
                     <div className="space-y-4">
-                        <div className="h-[1px] bg-slate-200 mx-8 my-8" />
-                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 italic ml-4">Otros Pedidos Listos</h3>
+                        {misEnReparto.length > 0 && <div className="h-[1px] bg-slate-200 mx-8 my-4" />}
+                        <div className="flex items-center gap-2 ml-4">
+                            <Package size={16} className="text-amber-500" />
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 italic">Pedidos Listos — Disponibles ({disponibles.length})</h3>
+                        </div>
                         <AnimatePresence mode="popLayout">
-                            {otrosPedidos.map((pedido) => (
-                                <OrderCardView key={pedido.id} pedido={pedido} isOwn={false} onDeliver={marcarEntregado} onMap={handleOpenMap} />
+                            {disponibles.map((pedido) => (
+                                <OrderCardView key={pedido.id} pedido={pedido} mode="disponible" onDeliver={marcarEntregado} onMap={handleOpenMap} onAssign={autoAsignar} />
+                            ))}
+                        </AnimatePresence>
+                    </div>
+                )}
+
+                {/* Pedidos de otros repartidores */}
+                {deOtros.length > 0 && (
+                    <div className="space-y-4">
+                        <div className="h-[1px] bg-slate-200 mx-8 my-4" />
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 italic ml-4">Entregas de Otros ({deOtros.length})</h3>
+                        <AnimatePresence mode="popLayout">
+                            {deOtros.map((pedido) => (
+                                <OrderCardView key={pedido.id} pedido={pedido} mode="otros" onDeliver={marcarEntregado} onMap={handleOpenMap} onAssign={autoAsignar} />
                             ))}
                         </AnimatePresence>
                     </div>
@@ -287,7 +383,7 @@ const DeliveryDashboard = () => {
                 {pedidosListos.length === 0 && isLoaded && (
                     <div className="py-20 flex flex-col items-center justify-center text-slate-300">
                         <Package size={60} className="opacity-10 mb-4" />
-                        <p className="font-black italic uppercase tracking-widest text-sm opacity-30">Todo entregado</p>
+                        <p className="font-black italic uppercase tracking-widest text-sm opacity-30">Sin pedidos pendientes</p>
                     </div>
                 )}
             </main>
@@ -304,7 +400,11 @@ const DeliveryDashboard = () => {
     );
 };
 
-const OrderCardView = ({ pedido, isOwn, onDeliver, onMap }: { pedido: DeliveryOrder, isOwn: boolean, onDeliver: any, onMap: any }) => (
+const OrderCardView = ({ pedido, mode, onDeliver, onMap, onAssign }: { pedido: DeliveryOrder, mode: 'en_reparto' | 'disponible' | 'otros', onDeliver: any, onMap: any, onAssign: any }) => {
+    const isEnReparto = mode === 'en_reparto';
+    const isDisponible = mode === 'disponible';
+
+    return (
     <motion.div
         layout
         initial={{ x: -20, opacity: 0 }}
@@ -312,24 +412,34 @@ const OrderCardView = ({ pedido, isOwn, onDeliver, onMap }: { pedido: DeliveryOr
         exit={{ scale: 0.8, opacity: 0 }}
         className={cn(
             "rounded-[2rem] shadow-lg border overflow-hidden transition-all duration-500",
-            isOwn ? "bg-white border-capriccio-gold ring-2 ring-capriccio-gold/20" : "bg-white border-slate-200 opacity-60 grayscale-[0.5]"
+            isEnReparto ? "bg-white border-capriccio-gold ring-2 ring-capriccio-gold/20" :
+            isDisponible ? "bg-white border-amber-300 ring-2 ring-amber-200/30" :
+            "bg-white border-slate-200 opacity-50"
         )}
     >
         <div className="p-6">
             <div className="flex justify-between items-start mb-6">
                 <div className="flex items-center gap-3">
-                    <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", isOwn ? "bg-capriccio-gold text-slate-900" : "bg-slate-900 text-slate-400")}>
-                        <Package size={24} />
+                    <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center",
+                        isEnReparto ? "bg-capriccio-gold text-slate-900" :
+                        isDisponible ? "bg-amber-500 text-white" :
+                        "bg-slate-900 text-slate-400"
+                    )}>
+                        {isEnReparto ? <Bike size={24} /> : <Package size={24} />}
                     </div>
                     <div>
                         <p className="text-xl font-black italic text-slate-900 uppercase leading-tight">{pedido.cliente_nombre}</p>
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">
-                            {isOwn ? 'Asignado a ti' : `Asignado a: ${pedido.repartidor || 'Nadie'}`}
+                            {isEnReparto ? 'En camino contigo' : isDisponible ? 'Listo para recoger' : `Llevando: ${pedido.repartidor}`}
                         </span>
                     </div>
                 </div>
-                <div className={cn("px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border", isOwn ? "bg-capriccio-accent text-white border-capriccio-accent/20" : "bg-slate-100 text-slate-500 border-slate-200")}>
-                    {isOwn ? '¡Lleva esto!' : 'LISTO'}
+                <div className={cn("px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border",
+                    isEnReparto ? "bg-blue-600 text-white border-blue-500" :
+                    isDisponible ? "bg-amber-100 text-amber-700 border-amber-200" :
+                    "bg-slate-100 text-slate-500 border-slate-200"
+                )}>
+                    {isEnReparto ? 'EN REPARTO' : isDisponible ? 'DISPONIBLE' : 'EN REPARTO'}
                 </div>
             </div>
 
@@ -406,7 +516,17 @@ const OrderCardView = ({ pedido, isOwn, onDeliver, onMap }: { pedido: DeliveryOr
                 <p className="text-base font-black text-slate-900 italic">${pedido.total}</p>
             </div>
 
-            {(isOwn || !pedido.repartidor || pedido.repartidor === 'S/A' || pedido.repartidor.toUpperCase() === 'NADIE') && (
+            {/* Botón principal según modo */}
+            {isDisponible && (
+                <button
+                    onClick={() => onAssign(pedido.id)}
+                    className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-white py-5 rounded-[1.5rem] font-black text-lg italic uppercase tracking-widest shadow-xl shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 group"
+                >
+                    <Bike size={24} strokeWidth={3} className="group-hover:scale-110 transition-transform" /> TOMAR PEDIDO
+                </button>
+            )}
+
+            {isEnReparto && (
                 <button
                     onClick={() => onDeliver(pedido.id)}
                     className="w-full mt-6 bg-green-500 hover:bg-green-600 text-white py-5 rounded-[1.5rem] font-black text-lg italic uppercase tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 group"
@@ -416,7 +536,8 @@ const OrderCardView = ({ pedido, isOwn, onDeliver, onMap }: { pedido: DeliveryOr
             )}
         </div>
     </motion.div>
-);
+    );
+};
 
 const Sparkles = ({ size, className }: { size: number, className: string }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}>

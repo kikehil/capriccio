@@ -2,15 +2,10 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Clock, Bike, X, ChefHat } from 'lucide-react';
+import { Check, Clock, ChefHat, Store } from 'lucide-react';
 import { useTimer } from '@/hooks/useTimer';
 import { CartItem } from '@/data/cart';
 import { cn } from '@/lib/utils';
-
-interface Repartidor {
-    nombre: string;
-    socketId: string;
-}
 
 interface OrderCardProps {
     order: {
@@ -19,16 +14,20 @@ interface OrderCardProps {
         createdAt: string;
         timestamp: string;
         status?: string;
+        total?: number;
+        telefono_cliente?: string;
+        nombre_cliente?: string;
+        metodo_entrega?: string;
+        direccion?: string;
+        notas?: string;
     };
-    onComplete: (id: string, repartidor?: string) => void;
+    onComplete: (id: string) => void;
     onCompleteInStore: (id: string) => void;
     onStartPreparation: (id: string) => void;
-    repartidoresOnline: Repartidor[];
 }
 
-const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, onCompleteInStore, onStartPreparation, repartidoresOnline }) => {
+const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, onCompleteInStore, onStartPreparation }) => {
     const { days, hours, minutes, seconds, totalSeconds } = useTimer(order.createdAt);
-    const [showSelector, setShowSelector] = useState(false);
 
     // Dynamic styles based on time
     let statusColor = "bg-slate-900 border-slate-800";
@@ -53,10 +52,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, onCompleteInSt
         return `${minutes}:${seconds < 10 ? `0${seconds}` : seconds}`;
     };
 
-    const handleAssign = (nombre: string) => {
-        onComplete(order.id, nombre);
-        setShowSelector(false);
-    };
+    const isDelivery = order.metodo_entrega === 'domicilio' || order.metodo_entrega === 'delivery';
 
     return (
         <motion.div
@@ -118,54 +114,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, onCompleteInSt
                 ))}
             </div>
 
-            <div className="p-6 pt-0 relative">
-                <AnimatePresence>
-                    {showSelector && (
-                        <motion.div
-                            initial={{ y: 50, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            exit={{ y: 50, opacity: 0 }}
-                            className="absolute inset-x-0 bottom-0 bg-slate-950 p-6 rounded-t-[2.5rem] z-20 border-t border-white/10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)]"
-                        >
-                            <div className="flex justify-between items-center mb-6">
-                                <h4 className="text-white font-black italic uppercase tracking-widest text-xs">Asignar Repartidor</h4>
-                                <button onClick={() => setShowSelector(false)} className="text-slate-500 hover:text-white"><X size={20} /></button>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                                {repartidoresOnline.length === 0 ? (
-                                    <div className="py-8 text-center bg-white/5 rounded-2xl border border-dashed border-white/10">
-                                        <p className="text-slate-500 font-black italic uppercase text-[10px]">Sin repartidores online</p>
-                                    </div>
-                                ) : (
-                                    repartidoresOnline.map((rep, idx) => (
-                                        <button
-                                            key={idx}
-                                            onClick={() => handleAssign(rep.nombre)}
-                                            className="w-full bg-white/10 hover:bg-white/20 text-white p-4 rounded-2xl flex items-center justify-between transition-all group"
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 bg-capriccio-gold rounded-xl flex items-center justify-center text-slate-900">
-                                                    <Bike size={16} strokeWidth={3} />
-                                                </div>
-                                                <span className="font-black italic uppercase text-sm tracking-tight">{rep.nombre}</span>
-                                            </div>
-                                            <Check size={16} className="text-green-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        </button>
-                                    ))
-                                )}
-
-                                <button
-                                    onClick={() => { onCompleteInStore(order.id); setShowSelector(false); }}
-                                    className="w-full mt-2 bg-red-600/20 hover:bg-red-600/40 text-red-500 p-4 rounded-2xl font-black italic uppercase text-xs tracking-widest transition-all"
-                                >
-                                    Consumo en Sucursal
-                                </button>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
+            <div className="p-6 pt-0 space-y-2">
                 {order.status !== 'preparing' ? (
                     <button
                         onClick={() => onStartPreparation(order.id)}
@@ -175,16 +124,24 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, onCompleteInSt
                         En Preparación
                     </button>
                 ) : (
-                    <button
-                        onClick={() => setShowSelector(true)}
-                        className="w-full bg-slate-900 hover:bg-black text-white py-5 rounded-[1.5rem] font-black text-xl italic uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 overflow-hidden group relative"
-                    >
-                        <div className="absolute inset-0 bg-green-500 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                        <span className="relative z-10 flex items-center gap-3">
-                            <Check className="w-7 h-7 stroke-[4px] group-hover:scale-110 transition-transform" />
-                            DESPACHAR
-                        </span>
-                    </button>
+                    <>
+                        <button
+                            onClick={() => onComplete(order.id)}
+                            className="w-full bg-green-600 hover:bg-green-500 text-white py-5 rounded-[1.5rem] font-black text-xl italic uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+                        >
+                            <Check className="w-7 h-7 stroke-[4px]" />
+                            {isDelivery ? 'LISTO PARA ENTREGA' : 'LISTO'}
+                        </button>
+                        {!isDelivery && (
+                            <button
+                                onClick={() => onCompleteInStore(order.id)}
+                                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-[1.5rem] font-black text-xs italic uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                            >
+                                <Store className="w-4 h-4" />
+                                Entregado en Sucursal
+                            </button>
+                        )}
+                    </>
                 )}
             </div>
         </motion.div>

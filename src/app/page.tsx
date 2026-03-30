@@ -198,6 +198,7 @@ export default function Home() {
       referencias: userData.referencias,
       lat: userData.lat,
       lng: userData.lng,
+      metodo_entrega: userData.metodo_entrega || 'domicilio',
       // Vincula el pedido a la cuenta del cliente registrado
       telefono_cliente: clienteTelefono || userData.telefono,
     };

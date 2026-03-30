@@ -109,10 +109,35 @@ const KitchenDisplay = () => {
             setRepartidoresOnline(reps);
         });
 
+        // Re-fetch on reconnect (missed events while disconnected)
+        const handleReconnect = () => {
+            console.log("🔄 [Cocina] Socket reconectado — refrescando pedidos");
+            fetchOrders();
+        };
+        socket.on('connect', handleReconnect);
+
         return () => {
             socket.off('nuevo_pedido', handleNuevoPedido);
             socket.off('repartidores_online');
+            socket.off('connect', handleReconnect);
         };
+    }, []);
+
+    // 3. Re-sync cuando la pantalla vuelve a estar visible (tablet/móvil)
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                console.log("👁️ [Cocina] Pantalla visible — refrescando pedidos");
+                fetchOrders();
+                // Reconectar socket si se desconectó
+                const socket = getSocket();
+                if (socket && !socket.connected) {
+                    socket.connect();
+                }
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
     }, []);
 
     const startPreparation = async (id: string) => {
@@ -131,7 +156,60 @@ const KitchenDisplay = () => {
         } catch (error) { console.error('Error:', error); }
     };
 
-    const completeOrder = async (id: string, repartidor?: string) => {
+    const generateTicketPDF = (order: KitchenOrder) => {
+        // Generar ticket como ventana de impresión
+        const items = order.items.map(item => {
+            let line = `${item.quantity}x ${item.nombre}`;
+            if ((item as any).size) line += ` (${(item as any).size})`;
+            if ((item as any).crust) line += ` - ${(item as any).crust}`;
+            const extras = item.extras?.map((e: any) => e.nombre).join(', ');
+            if (extras) line += `\n   + ${extras}`;
+            return line;
+        }).join('\n');
+
+        const orderId = order.order_id || order.id;
+        const shortId = orderId.split('-')[1] || orderId.slice(-4);
+        const fecha = new Date().toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+        const ticketHTML = `
+<!DOCTYPE html>
+<html><head><title>Ticket #${shortId}</title>
+<style>
+    body { font-family: 'Courier New', monospace; width: 280px; margin: 0 auto; padding: 10px; font-size: 12px; }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .line { border-top: 1px dashed #000; margin: 8px 0; }
+    .item { margin: 4px 0; }
+    h2 { margin: 4px 0; font-size: 16px; }
+    @media print { body { width: 100%; } }
+</style></head>
+<body>
+    <div class="center bold"><h2>CAPRICCIO PIZZERIA</h2></div>
+    <div class="line"></div>
+    <div class="center bold">PEDIDO #${shortId}</div>
+    <div class="center">${fecha}</div>
+    ${(order as any).nombre_cliente ? `<div>Cliente: ${(order as any).nombre_cliente}</div>` : ''}
+    ${(order as any).telefono_cliente ? `<div>Tel: ${(order as any).telefono_cliente}</div>` : ''}
+    ${(order as any).metodo_entrega ? `<div>Entrega: ${(order as any).metodo_entrega}</div>` : ''}
+    ${(order as any).direccion ? `<div>Dir: ${(order as any).direccion}</div>` : ''}
+    <div class="line"></div>
+    <pre style="white-space:pre-wrap;font-size:12px;">${items}</pre>
+    <div class="line"></div>
+    ${order.total ? `<div class="bold" style="text-align:right;font-size:14px;">TOTAL: $${order.total.toLocaleString()}</div>` : ''}
+    ${(order as any).notas ? `<div class="line"></div><div>Notas: ${(order as any).notas}</div>` : ''}
+    <div class="line"></div>
+    <div class="center" style="font-size:10px;color:#888;">PEDIDO LISTO - IMPRESO DESDE COCINA</div>
+</body></html>`;
+
+        const w = window.open('', '_blank', 'width=320,height=500');
+        if (w) {
+            w.document.write(ticketHTML);
+            w.document.close();
+            setTimeout(() => { w.print(); }, 300);
+        }
+    };
+
+    const completeOrder = async (id: string) => {
         const order = orders.find(o => o.id === id);
         if (!order) return;
 
@@ -144,11 +222,13 @@ const KitchenDisplay = () => {
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    status: 'listo',
-                    repartidor: repartidor || 'S/A'
+                    status: 'listo'
                 })
             });
             if (resp.ok) {
+                // Generar e imprimir ticket
+                generateTicketPDF(order);
+                // Remover de la lista
                 setOrders(prev => prev.filter(o => o.id !== id));
             }
         } catch (error) {
@@ -222,7 +302,6 @@ const KitchenDisplay = () => {
                             onComplete={completeOrder}
                             onCompleteInStore={completeInStore}
                             onStartPreparation={startPreparation}
-                            repartidoresOnline={repartidoresOnline}
                         />
                     ))}
                 </AnimatePresence>

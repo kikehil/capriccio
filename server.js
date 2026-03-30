@@ -418,10 +418,11 @@ app.post('/api/pedidos', async (req, res) => {
             validatedItems.push({ ...item, totalItemPrice: unitPrice });
         }
 
+        const metodo_entrega = req.body.metodo_entrega || 'domicilio';
         const pedidoRes = await connection.client.query(
-            `INSERT INTO pedidos (order_id, cliente_nombre, telefono, direccion, referencias, total, lat, lng, negocio_id, telefono_cliente)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9) RETURNING id`,
-            [orderId, cliente_nombre, telefono, direccion, referencias, validatedTotal, lat, lng, telefono_cliente || telefono]
+            `INSERT INTO pedidos (order_id, cliente_nombre, telefono, direccion, referencias, total, lat, lng, negocio_id, telefono_cliente, metodo_entrega)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $10) RETURNING id`,
+            [orderId, cliente_nombre, telefono, direccion, referencias, validatedTotal, lat, lng, telefono_cliente || telefono, metodo_entrega]
         );
         const pedidoId = pedidoRes.rows[0].id;
 
@@ -472,6 +473,11 @@ app.patch('/api/pedidos/:id/status', staffOnly, async (req, res) => {
         let updateQuery = 'UPDATE pedidos SET status = $1, repartidor = $2 WHERE order_id = $3 RETURNING *';
         let values = [status, repartidor || 'S/A', id];
         if (status === 'listo') {
+            // Listo = preparado por cocina, sin repartidor aún
+            updateQuery = 'UPDATE pedidos SET status = $1 WHERE order_id = $2 RETURNING *';
+            values = [status, id];
+        } else if (status === 'en_reparto') {
+            // Repartidor se auto-asigna o es despachado
             updateQuery = 'UPDATE pedidos SET status = $1, repartidor = $2, asignado_at = CURRENT_TIMESTAMP WHERE order_id = $3 RETURNING *';
         } else if (status === 'entregado') {
             updateQuery = 'UPDATE pedidos SET status = $1, repartidor = $2, delivered_at = CURRENT_TIMESTAMP WHERE order_id = $3 RETURNING *';
@@ -485,7 +491,7 @@ app.patch('/api/pedidos/:id/status', staffOnly, async (req, res) => {
         const pedido = result.rows[0];
         const updatedOrder = pedido;
 
-        if (status === 'listo') {
+        if (status === 'listo' || status === 'en_reparto') {
             // Incluir items y extras para que el repartidor vea el detalle en tiempo real
             const itemsRes = await db.query(
                 'SELECT d.id, d.pizza_nombre as nombre, d.cantidad as quantity, d.precio_unitario as "totalItemPrice", d.size, d.crust FROM detalle_pedidos d WHERE d.pedido_id = $1',
@@ -495,7 +501,11 @@ app.patch('/api/pedidos/:id/status', staffOnly, async (req, res) => {
                 const ext = await db.query('SELECT extra_nombre as nombre, precio_extra as precio FROM extras_pedidos WHERE detalle_id = $1', [item.id]);
                 item.extras = ext.rows;
             }
-            io.emit('pedido_listo_reparto', { ...pedido, items: itemsRes.rows });
+            if (status === 'listo') {
+                io.emit('pedido_listo_reparto', { ...pedido, items: itemsRes.rows });
+            }
+            // Emitir actualización general para que todos los módulos se enteren
+            io.emit('pedido_status_update', { ...pedido, items: itemsRes.rows, status });
         } else {
             io.emit('pedido_entregado_remoto', pedido);
         }
@@ -519,6 +529,12 @@ app.patch('/api/pedidos/:id/status', staffOnly, async (req, res) => {
                     tag: `pedido-${id}`,
                 },
                 listo: {
+                    title: '✅ ¡Tu pedido está listo!',
+                    body: `Pedido #${shortId} — Tu orden ya está preparada. En un momento sale a entrega.`,
+                    url: '/?open=pedidos',
+                    tag: `pedido-${id}`,
+                },
+                en_reparto: {
                     title: '🛵 ¡Ya va en camino!',
                     body: `Pedido #${shortId} — ${repartidor && repartidor !== 'S/A' ? repartidor + ' lleva' : 'Tu repartidor lleva'} tu pizza. ¡Prepara el hambre!`,
                     url: '/?open=pedidos',
@@ -939,6 +955,7 @@ io.on('connection', (socket) => {
     if (!colNames.includes('telefono_cliente')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN telefono_cliente TEXT");
     if (!colNames.includes('calificacion')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN calificacion INTEGER DEFAULT 0");
     if (!colNames.includes('calificacion_comentario')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN calificacion_comentario TEXT");
+    if (!colNames.includes('metodo_entrega')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN metodo_entrega TEXT DEFAULT 'domicilio'");
     console.log('✅ Columnas tracking listas');
 })();
 

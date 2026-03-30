@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Phone, User, MessageSquare, ArrowRight, LocateFixed, Loader2, Edit2, Package } from 'lucide-react';
+import { X, MapPin, Phone, User, MessageSquare, ArrowRight, LocateFixed, Loader2, Edit2, Package, Bike, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CartItem } from '@/data/cart';
 
@@ -13,6 +13,7 @@ interface UserData {
     referencias: string;
     lat?: number;
     lng?: number;
+    metodo_entrega?: 'domicilio' | 'sucursal';
 }
 
 interface CheckoutModalProps {
@@ -36,6 +37,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
     const [isLocating, setIsLocating] = useState(false);
     const [privacidadAceptada, setPrivacidadAceptada] = useState(false);
     const [clienteLogueado, setClienteLogueado] = useState(false);
+    const [metodoEntrega, setMetodoEntrega] = useState<'domicilio' | 'sucursal'>('domicilio');
 
     useEffect(() => {
         setClienteLogueado(!!localStorage.getItem('capriccio_cliente_telefono'));
@@ -100,8 +102,14 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const dataToSend = {
+            ...userData,
+            metodo_entrega: metodoEntrega,
+            // Si es sucursal, limpiar dirección
+            direccion: metodoEntrega === 'sucursal' ? 'Recoger en sucursal' : userData.direccion,
+        };
         localStorage.setItem('pizza_user_data', JSON.stringify(userData));
-        onConfirm(userData);
+        onConfirm(dataToSend);
     };
 
     return (
@@ -231,13 +239,50 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                     </div>
                                 </div>
 
+                                {/* Selector de Método de Entrega */}
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Dirección de Entrega</label>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Metodo de Entrega</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setMetodoEntrega('domicilio')}
+                                            className={cn(
+                                                "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all",
+                                                metodoEntrega === 'domicilio'
+                                                    ? "border-capriccio-gold bg-capriccio-gold/10 text-capriccio-gold"
+                                                    : "border-white/10 bg-white/5 text-gray-400 hover:border-white/20"
+                                            )}
+                                        >
+                                            <Bike size={24} strokeWidth={2.5} />
+                                            <span className="text-xs font-black uppercase tracking-widest">A Domicilio</span>
+                                            <span className="text-[9px] font-bold opacity-60">Te lo llevamos</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setMetodoEntrega('sucursal')}
+                                            className={cn(
+                                                "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all",
+                                                metodoEntrega === 'sucursal'
+                                                    ? "border-capriccio-gold bg-capriccio-gold/10 text-capriccio-gold"
+                                                    : "border-white/10 bg-white/5 text-gray-400 hover:border-white/20"
+                                            )}
+                                        >
+                                            <Store size={24} strokeWidth={2.5} />
+                                            <span className="text-xs font-black uppercase tracking-widest">En Sucursal</span>
+                                            <span className="text-[9px] font-bold opacity-60">Paso por el</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {metodoEntrega === 'domicilio' && (
+                                <>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Direccion de Entrega</label>
                                     <div className="relative group">
                                         <MapPin className="absolute left-4 top-4 text-gray-500 group-focus-within:text-capriccio-gold transition-colors" size={18} />
                                         <textarea
                                             required
-                                            placeholder="Calle, número, colonia..."
+                                            placeholder="Calle, numero, colonia..."
                                             rows={2}
                                             className="w-full pl-12 pr-14 py-4 bg-capriccio-card border-none focus:ring-2 focus:ring-capriccio-gold rounded-2xl outline-none font-bold transition-all text-white placeholder-gray-600 resize-none"
                                             value={userData.direccion}
@@ -248,7 +293,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                             onClick={handleLocate}
                                             disabled={isLocating}
                                             className="absolute right-3 top-3 p-3 bg-black hover:bg-black/70 text-white rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
-                                            title="Usar mi ubicación actual"
+                                            title="Usar mi ubicacion actual"
                                         >
                                             {isLocating ? (
                                                 <Loader2 size={18} className="animate-spin text-capriccio-gold" />
@@ -265,13 +310,23 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                         <MessageSquare className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                                         <input
                                             type="text"
-                                            placeholder="Ej: Portón verde, timbre descompuesto"
+                                            placeholder="Ej: Porton verde, timbre descompuesto"
                                             className="w-full pl-12 pr-4 py-4 bg-capriccio-card border-none focus:ring-2 focus:ring-capriccio-gold rounded-2xl outline-none font-bold transition-all text-white placeholder-gray-600"
                                             value={userData.referencias}
                                             onChange={(e) => setUserData({ ...userData, referencias: e.target.value })}
                                         />
                                     </div>
                                 </div>
+                                </>
+                                )}
+
+                                {metodoEntrega === 'sucursal' && (
+                                    <div className="bg-capriccio-gold/10 border border-capriccio-gold/20 rounded-2xl p-4 text-center">
+                                        <Store size={28} className="mx-auto text-capriccio-gold mb-2" />
+                                        <p className="text-white font-black italic text-sm uppercase">Recoge en sucursal</p>
+                                        <p className="text-gray-400 text-xs font-bold mt-1">Tu pedido estara listo para que pases por el. Te notificaremos cuando este preparado.</p>
+                                    </div>
+                                )}
 
                                 {isSaved && (
                                     <motion.p

@@ -69,15 +69,17 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
 
             {/* Sidebar */}
             <aside className={cn(
-                "fixed inset-y-0 left-0 z-[100] w-72 bg-slate-950 text-white p-8 transition-transform duration-300 transform md:translate-x-0 md:static",
+                "fixed inset-y-0 left-0 z-[100] w-72 bg-slate-950 text-white flex flex-col transition-transform duration-300 transform md:translate-x-0 md:static",
                 isSidebarOpen ? "translate-x-0" : "-translate-x-full"
             )}>
-                <div className="flex flex-col items-center mb-12">
+                {/* Logo — fijo arriba */}
+                <div className="flex flex-col items-center px-8 pt-8 pb-4 shrink-0">
                     <img src="/logohd.png" alt="Logo" className="w-40 h-auto drop-shadow-xl mb-4" />
                     <span className="text-capriccio-gold text-xs font-black tracking-[0.3em] border-y border-capriccio-gold/20 py-1">Panel Admin v2</span>
                 </div>
 
-                <nav className="space-y-3">
+                {/* Nav — scrollable */}
+                <nav className="flex-1 overflow-y-auto px-8 py-4 space-y-2 min-h-0">
                     {navItems.map((item) => (
                         <button
                             key={item.id}
@@ -101,25 +103,26 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
                     ))}
                 </nav>
 
-                <div className="absolute bottom-6 left-8 right-8 space-y-3">
-                    <div className="p-5 bg-white/5 rounded-3xl border border-white/5">
+                {/* Footer — fijo abajo, nunca se empalma */}
+                <div className="shrink-0 px-8 pb-6 pt-4 space-y-3 border-t border-white/5">
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
                         <p className="text-[10px] font-black tracking-[0.3em] text-slate-500 mb-2">Usuario</p>
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-capriccio-gold rounded-lg flex items-center justify-center text-capriccio-dark font-black text-xs italic">
                                 {(typeof window !== 'undefined' && localStorage.getItem('capriccio_negocio_nombre')?.charAt(0)) || 'C'}
                             </div>
-                            <p className="font-bold text-sm text-slate-300">
+                            <p className="font-bold text-sm text-slate-300 truncate">
                                 {typeof window !== 'undefined' ? localStorage.getItem('capriccio_negocio_nombre') : 'Admin Capriccio'}
                             </p>
                         </div>
                     </div>
 
-                    <button 
+                    <button
                         onClick={() => {
                             localStorage.clear();
                             window.location.reload();
                         }}
-                        className="flex items-center justify-center gap-3 w-full p-4 rounded-2xl bg-red-500/10 text-red-500 font-bold hover:bg-red-500 hover:text-white transition-all group"
+                        className="flex items-center justify-center gap-3 w-full p-3 rounded-2xl bg-red-500/10 text-red-500 font-bold hover:bg-red-500 hover:text-white transition-all group"
                     >
                         <LogOut size={18} className="transition-transform group-hover:scale-110" />
                         <span className="text-xs tracking-widest font-black italic">Cerrar Sesión</span>

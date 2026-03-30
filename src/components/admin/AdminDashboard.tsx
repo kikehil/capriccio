@@ -265,29 +265,36 @@ const AdminDashboard = () => {
                     : 'Sin corte previo';
                 return (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            {/* Pendiente por liquidar */}
-                            <div className="bg-red-600 p-8 rounded-[3rem] shadow-2xl shadow-red-600/30 text-white relative overflow-hidden group">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                            {/* Total recibidos hoy */}
+                            <div className="bg-blue-600 p-6 rounded-[2.5rem] shadow-2xl shadow-blue-600/30 text-white relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
-                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Monto $ de pedidos recibidos</p>
-                                <h4 className="text-5xl font-black italic leading-none transition-all">${pendingRevenue.toLocaleString()}</h4>
-                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">Pendientes por liquidar</p>
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Total Recibidos</p>
+                                <h4 className="text-4xl font-black italic leading-none transition-all">${dailyRevenue.toLocaleString()}</h4>
+                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">{orderCount} pedidos hoy</p>
                             </div>
 
-                            {/* Liquidados desde el corte */}
-                            <div className="bg-green-600 p-8 rounded-[3rem] shadow-2xl shadow-green-600/30 text-white relative overflow-hidden group">
+                            {/* Liquidados */}
+                            <div className="bg-green-600 p-6 rounded-[2.5rem] shadow-2xl shadow-green-600/30 text-white relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
-                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Monto total de pedidos liquidados</p>
-                                <h4 className="text-5xl font-black italic leading-none transition-all">${liquidatedAfterCorte.toLocaleString()}</h4>
-                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">Desde último corte</p>
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Total Liquidados</p>
+                                <h4 className="text-4xl font-black italic leading-none transition-all">${liquidatedRevenue.toLocaleString()}</h4>
+                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">Cobrado hoy</p>
+                            </div>
+
+                            {/* Pendiente por liquidar */}
+                            <div className="bg-red-600 p-6 rounded-[2.5rem] shadow-2xl shadow-red-600/30 text-white relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Pendiente</p>
+                                <h4 className="text-4xl font-black italic leading-none transition-all">${(dailyRevenue - liquidatedRevenue).toLocaleString()}</h4>
+                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">Por liquidar</p>
                             </div>
 
                             {/* Corte info + botón para responsable */}
-                            <div className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-50 flex flex-col justify-between">
+                            <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-50 flex flex-col justify-between">
                                 <div>
-                                    <p className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 mb-2">Último Corte de Turno</p>
+                                    <p className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 mb-2">Último Corte</p>
                                     <p className="text-2xl font-black italic text-slate-900 leading-none">{ultimoCorteLabel}</p>
-                                    <p className="text-[9px] text-slate-400 font-bold mt-1">{orderCount} pedidos hoy</p>
                                 </div>
                                 {userRole === 'responsable' && (
                                     <button
@@ -309,26 +316,35 @@ const AdminDashboard = () => {
                 return (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                         {/* Stats Summary Cards for Basic Plan */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            <div className="bg-red-600 p-8 rounded-[3rem] shadow-2xl shadow-red-600/30 text-white relative overflow-hidden group">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                            <div className="bg-blue-600 p-6 rounded-[2.5rem] shadow-2xl shadow-blue-600/30 text-white relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
-                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Monto $ de pedidos recibidos</p>
-                                <h4 className="text-5xl font-black italic leading-none transition-all">${dailyRevenue.toLocaleString()}</h4>
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Total Recibidos</p>
+                                <h4 className="text-4xl font-black italic leading-none transition-all">${dailyRevenue.toLocaleString()}</h4>
+                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">{orderCount} pedidos hoy</p>
                             </div>
 
-                            <div className="bg-green-600 p-8 rounded-[3rem] shadow-2xl shadow-green-600/30 text-white relative overflow-hidden group">
+                            <div className="bg-green-600 p-6 rounded-[2.5rem] shadow-2xl shadow-green-600/30 text-white relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
-                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Monto total de pedidos liquidados</p>
-                                <h4 className="text-5xl font-black italic leading-none transition-all">${liquidatedRevenue.toLocaleString()}</h4>
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Total Liquidados</p>
+                                <h4 className="text-4xl font-black italic leading-none transition-all">${liquidatedRevenue.toLocaleString()}</h4>
+                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">Cobrado hoy</p>
                             </div>
 
-                            <div className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-50 flex items-center justify-between">
+                            <div className="bg-red-600 p-6 rounded-[2.5rem] shadow-2xl shadow-red-600/30 text-white relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-1000" />
+                                <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-80 mb-2">Pendiente</p>
+                                <h4 className="text-4xl font-black italic leading-none transition-all">${(dailyRevenue - liquidatedRevenue).toLocaleString()}</h4>
+                                <p className="text-[9px] opacity-60 mt-3 font-bold uppercase tracking-wider">Por liquidar</p>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-50 flex items-center justify-between">
                                 <div>
-                                    <p className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 mb-2">Pedidos Recibidos</p>
+                                    <p className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 mb-2">Pedidos Hoy</p>
                                     <p className="text-4xl font-black italic text-slate-900 leading-none">{orderCount}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 mb-2">Plan Actual</p>
+                                    <p className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-400 mb-2">Plan</p>
                                     <span className="bg-slate-900 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest italic">Básico</span>
                                 </div>
                             </div>
