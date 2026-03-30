@@ -37,14 +37,15 @@ interface BasicOrdersListProps {
     onStatusChange?: () => void;
 }
 
-// Helper: parse date string safely
+// Helper: parse date — SQLite guarda UTC sin "Z", hay que forzar UTC
 const parseDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
     try {
-        const safeStr = dateStr.includes(' ') && !dateStr.includes('T')
-            ? dateStr.replace(' ', 'T')
-            : dateStr;
-        const d = new Date(safeStr);
+        let s = dateStr.trim();
+        if (!s.includes('Z')) {
+            s = s.includes('T') ? s + 'Z' : s.replace(' ', 'T') + 'Z';
+        }
+        const d = new Date(s);
         return isNaN(d.getTime()) ? null : d;
     } catch { return null; }
 };
