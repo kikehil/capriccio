@@ -39,6 +39,8 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
         turno_id: turno.id,
       };
 
+      console.log('📤 Enviando pedido:', payload);
+
       // Enviar al API
       const response = await fetch(`${API_URL}/api/caja/pedidos`, {
         method: 'POST',
@@ -49,12 +51,18 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
         body: JSON.stringify(payload),
       });
 
+      console.log('📥 Respuesta del servidor:', response.status);
+
       if (!response.ok) {
-        throw new Error('Error al crear pedido');
+        const errorData = await response.text();
+        console.error('❌ Error del servidor:', errorData);
+        throw new Error(`Error ${response.status}: ${errorData}`);
       }
 
       const result = await response.json();
-      setOrderId(result.order_id);
+      console.log('✅ Pedido creado:', result);
+
+      setOrderId(result.order_id || result.id || 'SIN_ID');
       setSuccess(true);
 
       // Generar y descargar recibo
@@ -62,8 +70,9 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
         generateAndPrintReceipt(result);
       }
     } catch (err) {
-      console.error('Error:', err);
-      setError('Error al crear el pedido. Intenta de nuevo.');
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('❌ Error:', errorMsg);
+      setError(`Error: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
@@ -201,8 +210,11 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-2">Confirmar Pedido</h2>
-      <p className="text-gray-600 mb-6">Revisa los datos antes de finalizar</p>
+      <h2 className="text-2xl font-bold text-gray-800 mb-2">🎫 Valida el Pedido con el Cliente</h2>
+      <p className="text-gray-600 mb-6">Muéstrale este detalle para que confirme su pedido</p>
+
+      {/* TICKET VISUAL */}
+      <div className="mb-6 bg-gradient-to-br from-gray-50 to-white border-2 border-gray-300 rounded-lg p-6 shadow-md"  style={{ fontFamily: 'monospace' }}>
 
       {error && (
         <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg flex gap-3">
@@ -211,9 +223,15 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
         </div>
       )}
 
-      <div className="space-y-6">
+        {/* ENCABEZADO TICKET */}
+        <div className="text-center mb-4 pb-4 border-b-2 border-gray-400">
+          <h3 className="text-lg font-bold">🍕 CAPRICCIO PIZZERÍA 🍕</h3>
+          <p className="text-xs text-gray-600 mt-1">{new Date().toLocaleString('es-CL')}</p>
+        </div>
+
+      <div className="space-y-3">
         {/* CLIENTE */}
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bg-white p-3 rounded border border-gray-200">
           <h3 className="font-bold text-gray-800 mb-3">Cliente</h3>
           <div className="space-y-2 text-sm">
             <p>
@@ -234,7 +252,7 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
         </div>
 
         {/* PEDIDO */}
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bg-white p-3 rounded border border-gray-200">
           <h3 className="font-bold text-gray-800 mb-3">Pedido</h3>
           <div className="space-y-2 text-sm">
             <p>
@@ -249,7 +267,7 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
         </div>
 
         {/* ITEMS */}
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bg-white p-3 rounded border border-gray-200">
           <h3 className="font-bold text-gray-800 mb-3">Items ({formData.items.length})</h3>
           <div className="space-y-2 text-sm">
             {formData.items.map((item: any) => (
@@ -264,7 +282,7 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
         </div>
 
         {/* PAGO */}
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bg-white p-3 rounded border border-gray-200 mt-3 pt-3 border-t-2">
           <h3 className="font-bold text-gray-800 mb-3">Pago</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between font-bold text-lg">

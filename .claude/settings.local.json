@@ -10,7 +10,12 @@
       "Bash(node -e \":*)",
       "Bash(find D:WEBpizzaOKsrcappapi -name *.ts -o -name *.js)",
       "Bash(ls -la \"D:\\\\WEB\\\\pizzaOK\\\\src\\\\app\\\\api\"\" 2>&1 || echo \"No api directory \")",
-      "Bash(curl -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"username\"\"\"\":\"\"\"\"caja\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"CapriccioAdmin2026!\"\"\"\",\"\"\"\"role_request\"\"\"\":\"\"\"\"caja\"\"\"\"}')"
+      "Bash(curl -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"username\"\"\"\":\"\"\"\"caja\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"CapriccioAdmin2026!\"\"\"\",\"\"\"\"role_request\"\"\"\":\"\"\"\"caja\"\"\"\"}')",
+      "Bash(grep -r \"fetch.*[''\"\"]\\\\/api\" \"D:\\\\WEB\\\\pizzaOK\\\\src\\\\components\\\\caja\"\" --include=\"*.tsx\" --include=\"*.ts \")",
+      "Bash(curl -s http://localhost:3000/caja)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(grep -n \"input\" src/components/caja/steps/*.tsx)",
+      "Bash(git add:*)"
     ]
   }
 }

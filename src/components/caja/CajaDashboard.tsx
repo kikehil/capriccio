@@ -115,12 +115,15 @@ const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, on
       {/* HEADER */}
       <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">POS Capriccio</h1>
-            <p className="text-sm text-gray-600">
-              Cajero: <span className="font-semibold">{turno.cajero_nombre}</span> •
-              Hora: <span className="font-mono text-red-600 ml-2">{getCurrentTime()}</span>
-            </p>
+          <div className="flex items-center gap-4">
+            <img src="/logohd.png" alt="Capriccio" className="h-12 w-auto" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">POS Capriccio</h1>
+              <p className="text-sm text-gray-600">
+                Cajero: <span className="font-semibold">{turno.cajero_nombre}</span> •
+                Hora: <span className="font-mono text-red-600 ml-2">{getCurrentTime()}</span>
+              </p>
+            </div>
           </div>
           <button
             onClick={onLogout}
@@ -133,19 +136,19 @@ const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, on
 
         {/* TAB NAVIGATION */}
         <div className="border-t border-gray-200 overflow-x-auto">
-          <div className="flex gap-1 px-4 py-0">
+          <div className="flex gap-2 px-4 py-2">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 font-medium transition border-b-2 whitespace-nowrap ${
+                className={`flex flex-col items-center gap-1 px-6 py-4 font-bold text-lg transition whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'border-red-600 text-red-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-800'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
                 {tab.icon}
-                {tab.label}
+                <span className="text-xs md:text-sm">{tab.label}</span>
               </button>
             ))}
           </div>
