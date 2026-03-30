@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, AlertCircle } from 'lucide-react';
 import { CajaTurno } from '@/data/caja-types';
+import { API_URL } from '@/lib/socket';
 
 interface ShiftReportModalProps {
   turno: CajaTurno;
@@ -26,7 +27,7 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({ turno, onClose }) =
     setError('');
 
     try {
-      const response = await fetch(`/api/caja/turno/${turno.id}/cerrar`, {
+      const response = await fetch(`${API_URL}/api/caja/turno/${turno.id}/cerrar`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

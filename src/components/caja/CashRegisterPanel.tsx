@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp } from 'lucide-react';
 import { CajaTurno } from '@/data/caja-types';
+import { API_URL } from '@/lib/socket';
 
 interface CashRegisterStats {
   total_ordenes: number;
@@ -32,7 +33,7 @@ const CashRegisterPanel: React.FC<CashRegisterPanelProps> = ({ turno }) => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`/api/caja/reporte/turno/${turno.id}`, {
+      const response = await fetch(`${API_URL}/api/caja/reporte/turno/${turno.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('capriccio_token_caja')}`,
         },

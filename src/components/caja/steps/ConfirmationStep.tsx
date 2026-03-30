@@ -5,6 +5,7 @@ import { CheckCircle, AlertCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { CajaTurno, NewOrderRequest } from '@/data/caja-types';
+import { API_URL } from '@/lib/socket';
 
 interface StepProps {
   formData: any;
@@ -39,7 +40,7 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
       };
 
       // Enviar al API
-      const response = await fetch('/api/caja/pedidos', {
+      const response = await fetch(`${API_URL}/api/caja/pedidos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

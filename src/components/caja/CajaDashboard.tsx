@@ -7,6 +7,7 @@ import ActiveOrdersList from './ActiveOrdersList';
 import CashRegisterPanel from './CashRegisterPanel';
 import ShiftReportModal from './ShiftReportModal';
 import { CajaTurno } from '@/data/caja-types';
+import { API_URL } from '@/lib/socket';
 
 interface TabConfig {
   id: 'nuevo' | 'ordenes' | 'caja' | 'cerrar';
@@ -41,7 +42,7 @@ const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, on
   const handleOpenShift = async (efectivo_inicial: number) => {
     setLoading(true);
     try {
-      const response = await fetch('/api/caja/turno/abrir', {
+      const response = await fetch(`${API_URL}/api/caja/turno/abrir`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
