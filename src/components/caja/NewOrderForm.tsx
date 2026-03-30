@@ -99,8 +99,8 @@ const NewOrderForm: React.FC<NewOrderFormProps> = ({ turno }) => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-white rounded-xl shadow-lg p-8">
+    <div className="w-full mx-auto">
+      <div className="bg-white rounded-xl shadow-lg p-6">
         {/* Progress Indicator */}
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
