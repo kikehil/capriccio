@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Minus, X } from 'lucide-react';
 import { CajaItem, CajaTurno } from '@/data/caja-types';
 import { API_URL } from '@/lib/socket';
+import ProductCustomizationModal from '../ProductCustomizationModal';
 
 interface StepProps {
   formData: any;
@@ -33,6 +34,7 @@ const OrderItemsStep: React.FC<StepProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('🍕 Pizzas');
   const [loading, setLoading] = useState(true);
   const [showError, setShowError] = useState('');
+  const [selectedProductForCustomization, setSelectedProductForCustomization] = useState<MenuItem | null>(null);
 
   useEffect(() => {
     // Cargar menú real del API
@@ -78,23 +80,35 @@ const OrderItemsStep: React.FC<StepProps> = ({
   const filteredMenu = menu.filter(item => item.categoria === selectedCategory);
 
   const addItem = (item: MenuItem) => {
-    const existingItem = formData.items.find((i: CajaItem) => i.pizza_nombre === item.nombre);
+    // Abre modal de customización
+    setSelectedProductForCustomization(item);
+  };
 
-    if (existingItem) {
-      const updated = formData.items.map((i: CajaItem) =>
-        i.pizza_nombre === item.nombre ? { ...i, cantidad: i.cantidad + 1 } : i
-      );
-      updateFormData({ items: updated });
-    } else {
-      const newItem: CajaItem = {
-        pizza_nombre: item.nombre,
-        cantidad: 1,
-        precio_unitario: item.precio,
-      };
-      updateFormData({
-        items: [...formData.items, newItem],
-      });
-    }
+  const handleAddWithCustomization = (item: MenuItem, options: any) => {
+    // Calcula precio con opciones
+    const sizeMultipliers: Record<string, number> = {
+      chica: 0.85,
+      mediana: 1,
+      grande: 1.3,
+    };
+
+    const basePrice = item.precio;
+    const sizeAdjustment = basePrice * (sizeMultipliers[options.size || 'mediana'] - 1);
+    const extrasPrice = options.extras.length > 0 ? (options.extras.length * 30) : 0; // Aproximado
+    const finalPrice = basePrice + sizeAdjustment + extrasPrice;
+
+    // Nombre con variantes
+    const itemName = `${item.nombre} (${options.size || 'mediana'})${options.extras.length > 0 ? ' + extras' : ''}`;
+
+    const newItem: CajaItem = {
+      pizza_nombre: itemName,
+      cantidad: options.cantidad,
+      precio_unitario: finalPrice,
+    };
+
+    updateFormData({
+      items: [...formData.items, newItem],
+    });
   };
 
   const removeItem = (itemName: string) => {
@@ -260,6 +274,15 @@ const OrderItemsStep: React.FC<StepProps> = ({
           Siguiente
         </button>
       </div>
+
+      {/* CUSTOMIZATION MODAL */}
+      {selectedProductForCustomization && (
+        <ProductCustomizationModal
+          product={selectedProductForCustomization}
+          onAdd={handleAddWithCustomization}
+          onClose={() => setSelectedProductForCustomization(null)}
+        />
+      )}
     </div>
   );
 };
