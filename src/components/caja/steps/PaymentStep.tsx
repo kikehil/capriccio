@@ -161,7 +161,7 @@ const PaymentStep: React.FC<StepProps> = ({
                 type="number"
                 value={montoRecibido}
                 onChange={(e) => handleMontoChange(e.target.value)}
-                className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none text-gray-900 bg-white"
                 placeholder="0"
                 autoFocus
               />

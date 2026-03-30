@@ -131,7 +131,7 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({ turno, onClose }) =
                 type="number"
                 value={efectivoReportado}
                 onChange={(e) => setEfectivoReportado(e.target.value)}
-                className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 bg-white"
                 placeholder="0"
                 autoFocus
               />
@@ -177,7 +177,7 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({ turno, onClose }) =
               <textarea
                 value={notas}
                 onChange={(e) => setNotas(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 bg-white"
                 placeholder="Ej: Diferencia debido a cambio redondeado..."
                 rows={3}
               />

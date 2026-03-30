@@ -69,7 +69,7 @@ const CustomerInfoStep: React.FC<StepProps> = ({
             type="text"
             value={formData.cliente_nombre}
             onChange={(e) => handleChange('cliente_nombre', e.target.value)}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition ${
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition text-gray-900 bg-white ${
               errors.cliente_nombre ? 'border-red-500' : 'border-gray-300'
             }`}
             placeholder="Ej: Carlos Gómez"
@@ -128,7 +128,7 @@ const CustomerInfoStep: React.FC<StepProps> = ({
               <textarea
                 value={formData.referencias || ''}
                 onChange={(e) => handleChange('referencias', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition text-gray-900 bg-white"
                 placeholder="Ej: Casa blanca con puerta azul, esquina con pasaje"
                 rows={2}
               />
