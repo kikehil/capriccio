@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import CajaLogin from '@/components/caja/CajaLogin';
 import CajaDashboard from '@/components/caja/CajaDashboard';
 import { CajaTurno } from '@/data/caja-types';
+import { API_URL } from '@/lib/socket';
 
 export default function CajaPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -25,7 +26,7 @@ export default function CajaPage() {
 
   const fetchActiveTurno = async (token: string) => {
     try {
-      const response = await fetch('/api/caja/turno/activo', {
+      const response = await fetch(`${API_URL}/api/caja/turno/activo`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
