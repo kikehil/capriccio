@@ -89,7 +89,7 @@ const CustomerInfoStep: React.FC<StepProps> = ({
             type="tel"
             value={formData.telefono}
             onChange={(e) => handleChange('telefono', e.target.value)}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition ${
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition text-gray-900 bg-white ${
               errors.telefono ? 'border-red-500' : 'border-gray-300'
             }`}
             placeholder="Ej: +56912345678"

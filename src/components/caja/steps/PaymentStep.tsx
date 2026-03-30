@@ -71,8 +71,10 @@ const PaymentStep: React.FC<StepProps> = ({
       return;
     }
 
+    // Para efectivo: enviar el monto ingresado
+    // Para tarjeta: enviar el total como monto (se procesará después)
     updateFormData({
-      monto_recibido: formData.payment_method === 'efectivo' ? parseFloat(montoRecibido) : null,
+      monto_recibido: formData.payment_method === 'efectivo' ? parseFloat(montoRecibido) : formData.total,
     });
     onNext();
   };
