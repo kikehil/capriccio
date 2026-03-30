@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { CajaTurno } from '@/data/caja-types';
+import NumericKeypad from '@/components/ui/NumericKeypad';
 
 interface StepProps {
   formData: any;
@@ -19,6 +20,7 @@ const CustomerInfoStep: React.FC<StepProps> = ({
   onPrev,
 }) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showPhoneKeypad, setShowPhoneKeypad] = useState(false);
 
   const handleChange = (field: string, value: string) => {
     updateFormData({ [field]: value });
@@ -86,16 +88,32 @@ const CustomerInfoStep: React.FC<StepProps> = ({
             Teléfono *
           </label>
           <input
-            type="tel"
+            type="text"
+            inputMode="none"
             value={formData.telefono}
             onChange={(e) => handleChange('telefono', e.target.value)}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition text-gray-900 bg-white ${
+            onFocus={() => setShowPhoneKeypad(true)}
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition text-gray-900 bg-white cursor-pointer ${
               errors.telefono ? 'border-red-500' : 'border-gray-300'
             }`}
             placeholder="Ej: +56912345678"
+            readOnly
           />
           {errors.telefono && (
             <p className="text-red-600 text-sm mt-1">{errors.telefono}</p>
+          )}
+
+          {/* TECLADO NUMÉRICO PARA TELÉFONO */}
+          {showPhoneKeypad && (
+            <div className="mt-4 pt-4 border-t border-gray-300">
+              <p className="text-sm text-gray-600 mb-3 font-semibold">Ingresa el teléfono:</p>
+              <NumericKeypad
+                value={formData.telefono}
+                onChange={(val) => handleChange('telefono', val)}
+                onClose={() => setShowPhoneKeypad(false)}
+                showDot={true}
+              />
+            </div>
           )}
         </div>
 

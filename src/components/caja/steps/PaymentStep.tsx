@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { DollarSign, CreditCard } from 'lucide-react';
 import { PaymentMethod, CajaTurno } from '@/data/caja-types';
+import NumericKeypad from '@/components/ui/NumericKeypad';
 
 interface StepProps {
   formData: any;
@@ -20,6 +21,7 @@ const PaymentStep: React.FC<StepProps> = ({
   onPrev,
 }) => {
   const [montoRecibido, setMontoRecibido] = useState<string>('');
+  const [showKeypad, setShowKeypad] = useState(false);
   const [errors, setErrors] = useState<string>('');
 
   // Determinar si se cobra en caja
@@ -160,12 +162,14 @@ const PaymentStep: React.FC<StepProps> = ({
                 Monto Recibido ($)
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="none"
                 value={montoRecibido}
                 onChange={(e) => handleMontoChange(e.target.value)}
-                className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none text-gray-900 bg-white"
+                onFocus={() => setShowKeypad(true)}
+                className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none text-gray-900 bg-white cursor-pointer"
                 placeholder="0"
-                autoFocus
+                readOnly
               />
 
               {/* RESUMEN */}
@@ -185,6 +189,19 @@ const PaymentStep: React.FC<StepProps> = ({
                   </span>
                 </div>
               </div>
+
+              {/* TECLADO NUMÉRICO TÁCTIL */}
+              {showKeypad && (
+                <div className="mt-6 pt-6 border-t border-gray-300">
+                  <p className="text-sm text-gray-600 mb-3 font-semibold">Ingresa el monto recibido:</p>
+                  <NumericKeypad
+                    value={montoRecibido}
+                    onChange={setMontoRecibido}
+                    onClose={() => setShowKeypad(false)}
+                    showDot={false}
+                  />
+                </div>
+              )}
             </div>
           )}
 
