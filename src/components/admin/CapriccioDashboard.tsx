@@ -186,6 +186,40 @@ export default function CapriccioDashboard() {
                         {clientes?.nuevosHoy ? `+${clientes.nuevosHoy} nuevos hoy` : 'Sin nuevos hoy'}
                     </p>
                 </div>
+
+                {/* Pedidos Activos */}
+                <div className="bg-white p-7 rounded-[2.5rem] shadow-xl border border-slate-100 group">
+                    <Bike size={20} className="mb-3 text-blue-500" />
+                    <p className="text-[10px] uppercase font-black tracking-[0.25em] text-slate-400 mb-1">Pedidos Activos</p>
+                    <h4 className="text-5xl font-black italic leading-none text-blue-600">
+                        {Math.max(0, tarjetas.recibidosCantidad - tarjetas.liquidadosCantidad)}
+                    </h4>
+                    <p className="text-xs font-bold text-slate-400 mt-2">En proceso ahora</p>
+                </div>
+
+                {/* Ticket Promedio */}
+                <div className="bg-white p-7 rounded-[2.5rem] shadow-xl border border-slate-100 group">
+                    <TrendingUp size={20} className="mb-3 text-emerald-500" />
+                    <p className="text-[10px] uppercase font-black tracking-[0.25em] text-slate-400 mb-1">Ticket Promedio</p>
+                    <h4 className="text-4xl font-black italic leading-none text-emerald-600">
+                        ${tarjetas.recibidosCantidad > 0
+                            ? Math.round(tarjetas.recibidosMonto / tarjetas.recibidosCantidad).toLocaleString()
+                            : '0'}
+                    </h4>
+                    <p className="text-xs font-bold text-slate-400 mt-2">Por pedido hoy</p>
+                </div>
+
+                {/* Repartidores Activos */}
+                <div className="bg-white p-7 rounded-[2.5rem] shadow-xl border border-slate-100 group">
+                    <CheckCircle size={20} className="mb-3 text-purple-500" />
+                    <p className="text-[10px] uppercase font-black tracking-[0.25em] text-slate-400 mb-1">Tasa de Cierre</p>
+                    <h4 className="text-5xl font-black italic leading-none text-purple-600">
+                        {tarjetas.recibidosCantidad > 0
+                            ? Math.round((tarjetas.liquidadosCantidad / tarjetas.recibidosCantidad) * 100)
+                            : 0}%
+                    </h4>
+                    <p className="text-xs font-bold text-slate-400 mt-2">{tarjetas.liquidadosCantidad} de {tarjetas.recibidosCantidad} pedidos</p>
+                </div>
             </div>
 
             {/* Gráfica semanal + Top Productos */}

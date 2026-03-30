@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(node init-db.js)",
+      "Bash(npm run:*)",
+      "Bash(pkill -f \"next build\")"
+    ]
+  }
+}

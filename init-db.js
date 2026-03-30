@@ -112,7 +112,15 @@ async function init() {
             liquidado_por TEXT,
             asignado_at DATETIME,
             delivered_at DATETIME,
-            created_at DATETIME DEFAULT (datetime('now','localtime'))
+            created_at DATETIME DEFAULT (datetime('now','localtime')),
+            -- Campos POS (Punto de Venta)
+            order_origin TEXT DEFAULT 'web' CHECK (order_origin IN ('web', 'llamada', 'presencial')),
+            cajero_id INTEGER REFERENCES usuarios(id),
+            cajero_nombre TEXT,
+            payment_method TEXT DEFAULT 'efectivo' CHECK (payment_method IN ('efectivo', 'tarjeta', 'transferencia', 'mixto')),
+            monto_recibido REAL,
+            pagado_at DATETIME,
+            caja_notes TEXT
         );
     `);
 
@@ -149,6 +157,38 @@ async function init() {
             verificado INTEGER NOT NULL DEFAULT 0,
             puntos INTEGER NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT (datetime('now','localtime'))
+        );
+    `);
+
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS caja_turno (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cajero_id INTEGER NOT NULL REFERENCES usuarios(id),
+            cajero_nombre TEXT NOT NULL,
+            negocio_id INTEGER NOT NULL REFERENCES negocios(id),
+            abierto_at DATETIME NOT NULL DEFAULT (datetime('now','localtime')),
+            cerrado_at DATETIME,
+            efectivo_inicial REAL DEFAULT 0,
+            efectivo_recibido REAL,
+            efectivo_reportado REAL,
+            diferencia REAL,
+            total_ordenes_caja INTEGER,
+            total_efectivo_esperado REAL,
+            liquidado INTEGER NOT NULL DEFAULT 0,
+            liquidado_at DATETIME,
+            created_at DATETIME DEFAULT (datetime('now','localtime'))
+        );
+    `);
+
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS caja_pagos_detalle (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            turno_id INTEGER NOT NULL REFERENCES caja_turno(id),
+            pedido_id INTEGER REFERENCES pedidos(id),
+            monto REAL NOT NULL,
+            payment_method TEXT NOT NULL,
+            cambio_entregado REAL,
+            pagado_at DATETIME DEFAULT (datetime('now','localtime'))
         );
     `);
 

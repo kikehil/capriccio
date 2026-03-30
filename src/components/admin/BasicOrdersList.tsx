@@ -274,27 +274,6 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
                                                 <Clock size={10} /> {formatTime(order.created_at)}
                                             </span>
                                             <StatusLabel status={order.status} />
-                                            {/* Timer ascendente: tiempo transcurrido */}
-                                            {isPending(order) ? (
-                                                <ElapsedTimer
-                                                    since={order.created_at}
-                                                    colorClass={
-                                                        (() => {
-                                                            const d = parseDate(order.created_at);
-                                                            if (!d) return 'text-amber-500';
-                                                            const mins = (Date.now() - d.getTime()) / 60000;
-                                                            if (mins > 30) return 'text-red-600 font-black';
-                                                            if (mins > 15) return 'text-amber-600';
-                                                            return 'text-blue-500';
-                                                        })()
-                                                    }
-                                                />
-                                            ) : order.status === 'entregado' && order.delivered_at ? (
-                                                <span className="flex items-center gap-1 text-green-600">
-                                                    <CheckCircle2 size={10} />
-                                                    {formatElapsedBetween(order.created_at, order.delivered_at)}
-                                                </span>
-                                            ) : null}
                                             {/* Repartidor asignado */}
                                             {order.repartidor && order.repartidor !== 'S/A' && order.repartidor !== 'sucursal' && (
                                                 <span className="flex items-center gap-1 text-purple-500">
@@ -306,6 +285,45 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
                                 </div>
 
                                 <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end shrink-0">
+                                    {/* Timer grande al lado del monto */}
+                                    {isPending(order) ? (
+                                        <div className={cn(
+                                            "text-right px-4 py-2 rounded-2xl border",
+                                            (() => {
+                                                const d = parseDate(order.created_at);
+                                                if (!d) return 'bg-amber-50 border-amber-200';
+                                                const mins = (Date.now() - d.getTime()) / 60000;
+                                                if (mins > 30) return 'bg-red-50 border-red-200';
+                                                if (mins > 15) return 'bg-amber-50 border-amber-200';
+                                                return 'bg-blue-50 border-blue-200';
+                                            })()
+                                        )}>
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Tiempo</p>
+                                            <ElapsedTimer
+                                                since={order.created_at}
+                                                colorClass={cn(
+                                                    "text-xl font-black italic tabular-nums",
+                                                    (() => {
+                                                        const d = parseDate(order.created_at);
+                                                        if (!d) return 'text-amber-600';
+                                                        const mins = (Date.now() - d.getTime()) / 60000;
+                                                        if (mins > 30) return 'text-red-600';
+                                                        if (mins > 15) return 'text-amber-600';
+                                                        return 'text-blue-600';
+                                                    })()
+                                                )}
+                                            />
+                                        </div>
+                                    ) : order.status === 'entregado' && order.delivered_at ? (
+                                        <div className="text-right px-4 py-2 rounded-2xl border bg-green-50 border-green-200">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Entregado en</p>
+                                            <p className="text-xl font-black italic text-green-600 flex items-center gap-1">
+                                                <CheckCircle2 size={16} />
+                                                {formatElapsedBetween(order.created_at, order.delivered_at)}
+                                            </p>
+                                        </div>
+                                    ) : null}
+
                                     <div className="text-right">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total</p>
                                         <p className="text-2xl font-black italic text-slate-900 leading-none">${Number(order.total || 0).toLocaleString()}</p>

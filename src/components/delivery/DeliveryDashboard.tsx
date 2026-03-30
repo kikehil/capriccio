@@ -7,6 +7,21 @@ import { cn } from '@/lib/utils';
 import { RepartidorMap } from './MapIndex';
 import { getSocket, API_URL } from '@/lib/socket';
 
+function getElapsedTime(createdAt?: string): string {
+    if (!createdAt) return '—';
+    const diff = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
+    if (diff < 60) return `${diff}s`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} min`;
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function getElapsedMinutes(createdAt?: string): number {
+    if (!createdAt) return 0;
+    return Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+}
+
 interface DeliveryOrder {
     id: string;
     cliente_nombre: string;
@@ -22,6 +37,7 @@ interface DeliveryOrder {
     createdAt?: string;
     repartidor?: string;
     status?: string;
+    metodo_entrega?: string;
 }
 
 const DeliveryDashboard = () => {
@@ -35,6 +51,17 @@ const DeliveryDashboard = () => {
     // Auth State
     const [repartidorName, setRepartidorName] = useState<string | null>(null);
     const [nameInput, setNameInput] = useState('');
+    const [tick, setTick] = useState(0);
+
+    const handleAuthError = () => {
+        localStorage.removeItem('capriccio_token_repartidor');
+        window.location.reload();
+    };
+
+    useEffect(() => {
+        const interval = setInterval(() => setTick(t => t + 1), 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     const fetchInitialOrders = async () => {
         setIsLoaded(false);
@@ -45,12 +72,16 @@ const DeliveryDashboard = () => {
                     'Authorization': `Bearer ${token}`
                 }
             });
+            if (res.status === 401) { handleAuthError(); return; }
             const data = await res.json();
 
             if (Array.isArray(data)) {
-                // Mostrar pedidos "listo" (sin asignar) y "en_reparto" (asignados)
+                // Solo pedidos a domicilio — excluir recoger en sucursal
                 const relevantes = data
-                    .filter(p => p.status === 'listo' || p.status === 'en_reparto' || p.status === 'despachado')
+                    .filter(p =>
+                        (p.status === 'listo' || p.status === 'en_reparto' || p.status === 'despachado') &&
+                        (p.metodo_entrega === 'domicilio' || p.metodo_entrega === 'delivery' || !p.metodo_entrega)
+                    )
                     .map(p => ({
                         ...p,
                         order_id: p.order_id || p.id,
@@ -104,6 +135,8 @@ const DeliveryDashboard = () => {
         const handleDisconnect = () => setSocketConnected(false);
 
         const handlePedidoListo = (pedido: any) => {
+            // Ignorar pedidos de recogida en sucursal
+            if (pedido.metodo_entrega && pedido.metodo_entrega !== 'domicilio' && pedido.metodo_entrega !== 'delivery') return;
             setPedidosListos(prev => {
                 if (prev.some(p => p.id === pedido.id)) return prev;
                 return [
@@ -203,6 +236,7 @@ const DeliveryDashboard = () => {
                     repartidor: repartidorName
                 })
             });
+            if (res.status === 401) { handleAuthError(); return; }
             if (res.ok) {
                 // Actualizar localmente
                 setPedidosListos(prev => prev.map(p =>
@@ -232,6 +266,7 @@ const DeliveryDashboard = () => {
                     repartidor: repartidorName
                 })
             });
+            if (res.status === 401) { handleAuthError(); return; }
             if (res.ok) {
                 setPedidosListos(prev => prev.filter(p => p.id !== id));
                 if (selectedOrder?.id === id) setIsMapOpen(false);
@@ -265,6 +300,8 @@ const DeliveryDashboard = () => {
         setSelectedOrder(pedido);
         setIsMapOpen(true);
     };
+
+    void tick; // triggers re-render every 30s to update elapsed times
 
     // Mis pedidos en reparto (asignados a mí)
     const misEnReparto = pedidosListos.filter(p =>
@@ -336,6 +373,56 @@ const DeliveryDashboard = () => {
             </header>
 
             <main className="p-4 space-y-6 mt-4">
+                {/* Resumen de pedidos activos — ordenados de mayor a menor tiempo */}
+                {pedidosListos.length > 0 && (
+                    <div>
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 italic mb-3 ml-1">Resumen activo</h3>
+                        <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
+                            {[...pedidosListos]
+                                .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime())
+                                .map((pedido) => {
+                                    const mins = getElapsedMinutes(pedido.createdAt);
+                                    const isUrgent = mins >= 45;
+                                    const isWarning = mins >= 30 && mins < 45;
+                                    return (
+                                        <div
+                                            key={pedido.id}
+                                            className={cn(
+                                                "snap-start flex-shrink-0 w-36 rounded-[1.5rem] p-4 border flex flex-col gap-2",
+                                                isUrgent ? "bg-red-50 border-red-200 ring-2 ring-red-300/40" :
+                                                isWarning ? "bg-amber-50 border-amber-200" :
+                                                "bg-white border-slate-100"
+                                            )}
+                                        >
+                                            <p className={cn("text-[10px] font-black uppercase tracking-widest",
+                                                isUrgent ? "text-red-500" : isWarning ? "text-amber-500" : "text-slate-400"
+                                            )}>
+                                                #{String(pedido.order_id).slice(-4)}
+                                            </p>
+                                            <span className={cn(
+                                                "self-start text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
+                                                pedido.status === 'en_reparto' || pedido.status === 'despachado'
+                                                    ? "bg-blue-100 text-blue-700"
+                                                    : "bg-amber-100 text-amber-700"
+                                            )}>
+                                                {pedido.status === 'en_reparto' || pedido.status === 'despachado' ? 'EN REPARTO' : 'LISTO'}
+                                            </span>
+                                            <div className="flex items-center gap-1 mt-auto">
+                                                <Clock size={10} className={isUrgent ? "text-red-400" : isWarning ? "text-amber-400" : "text-slate-300"} />
+                                                <span className={cn("text-base font-black italic leading-none",
+                                                    isUrgent ? "text-red-600" : isWarning ? "text-amber-600" : "text-slate-700"
+                                                )}>
+                                                    {getElapsedTime(pedido.createdAt)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            }
+                        </div>
+                    </div>
+                )}
+
                 {/* Mis Pedidos en Reparto */}
                 {misEnReparto.length > 0 && (
                     <div className="space-y-4">
