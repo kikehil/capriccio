@@ -1611,7 +1611,7 @@ app.get('/api/caja/pedidos/turno/:turno_id', authorize(['admin', 'caja', 'respon
 });
 
 // GET /api/caja/reporte/turno/:turno_id — Obtiene reporte de un turno
-app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'responsable']), async (req, res) => {
+app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
     const { turno_id } = req.params;
 
     try {
@@ -1625,31 +1625,47 @@ app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'responsable'])
         }
 
         const turno = turnoResult.rows[0];
+        // Si el turno está abierto, usar hora actual como límite
+        const cerradoAt = turno.cerrado_at || new Date().toISOString();
 
-        // Obtener órdenes del turno
+        // Obtener órdenes del turno:
+        //   - Pedidos POS del cajero en la fecha del turno
+        //   - Pedidos web para recoger/consumir en sucursal creados durante el turno
         const ordenesResult = await db.query(
             `SELECT p.*, COUNT(dp.id) as items_count
              FROM pedidos p
              LEFT JOIN detalle_pedidos dp ON p.id = dp.pedido_id
-             WHERE p.cajero_id = $1 AND DATE(p.created_at) = DATE($2)
+             WHERE (
+                 (p.cajero_id = $1 AND DATE(p.created_at) = DATE($2))
+                 OR (p.order_origin = 'web'
+                     AND p.metodo_entrega IN ('sucursal', 'para_llevar')
+                     AND p.created_at >= $3
+                     AND p.created_at <= $4)
+             )
              GROUP BY p.id
              ORDER BY p.created_at DESC`,
-            [turno.cajero_id, turno.abierto_at]
+            [turno.cajero_id, turno.abierto_at, turno.abierto_at, cerradoAt]
         );
 
-        // Calcular resumen
+        // Calcular resumen (POS + pedidos web de sucursal/para_llevar durante el turno)
         const resumenResult = await db.query(
             `SELECT
                 COUNT(*) as total_ordenes,
-                SUM(CASE WHEN payment_method != 'no_pago' THEN 1 ELSE 0 END) as ordenes_pagadas,
-                SUM(CASE WHEN payment_method = 'efectivo' THEN total ELSE 0 END) as total_efectivo,
-                SUM(CASE WHEN payment_method = 'tarjeta' THEN total ELSE 0 END) as total_tarjeta,
+                SUM(CASE WHEN payment_method != 'no_pago' AND payment_method IS NOT NULL THEN 1 ELSE 0 END) as ordenes_pagadas,
+                SUM(CASE WHEN payment_method = 'efectivo' THEN COALESCE(total, 0) ELSE 0 END) as total_efectivo,
+                SUM(CASE WHEN payment_method = 'tarjeta' THEN COALESCE(total, 0) ELSE 0 END) as total_tarjeta,
                 SUM(CASE WHEN order_origin = 'llamada' THEN 1 ELSE 0 END) as ordenes_llamada,
                 SUM(CASE WHEN order_origin = 'presencial' THEN 1 ELSE 0 END) as ordenes_presencial,
                 SUM(CASE WHEN order_origin = 'web' THEN 1 ELSE 0 END) as ordenes_web
              FROM pedidos
-             WHERE cajero_id = $1 AND DATE(created_at) = DATE($2)`,
-            [turno.cajero_id, turno.abierto_at]
+             WHERE (
+                 (cajero_id = $1 AND DATE(created_at) = DATE($2))
+                 OR (order_origin = 'web'
+                     AND metodo_entrega IN ('sucursal', 'para_llevar')
+                     AND created_at >= $3
+                     AND created_at <= $4)
+             )`,
+            [turno.cajero_id, turno.abierto_at, turno.abierto_at, cerradoAt]
         );
 
         res.json({
