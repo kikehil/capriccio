@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, ChevronDown, ChevronUp, Clock, Phone, MapPin, CheckCircle2, Bike, Timer, Package } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronUp, Clock, User, Phone, MapPin, CheckCircle2, Bike, Store, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { API_URL, getSocket } from '@/lib/socket';
 
@@ -13,6 +13,7 @@ interface OrderItem {
     crust?: string;
     totalItemPrice?: number;
     precio_unitario?: number;
+    extras?: { nombre: string; precio?: number }[];
 }
 
 interface Order {
@@ -26,7 +27,6 @@ interface Order {
     liquidado: number;
     created_at: string;
     delivered_at?: string;
-    asignado_at?: string;
     repartidor?: string;
     metodo_entrega?: string;
     notas?: string;
@@ -37,88 +37,295 @@ interface BasicOrdersListProps {
     onStatusChange?: () => void;
 }
 
-// Helper: parse date — SQLite guarda UTC sin "Z", hay que forzar UTC
-const parseDate = (dateStr: string): Date | null => {
-    if (!dateStr) return null;
-    try {
-        let s = dateStr.trim();
-        if (!s.includes('Z')) {
-            s = s.includes('T') ? s + 'Z' : s.replace(' ', 'T') + 'Z';
-        }
+// Parse SQLite UTC date string (no Z suffix) correctly
+const parseDate = (str: string): number => {
+    if (!str) return Date.now();
+    let s = str.trim();
+    if (s.includes('Z') || s.includes('+')) {
         const d = new Date(s);
-        return isNaN(d.getTime()) ? null : d;
-    } catch { return null; }
+        return isNaN(d.getTime()) ? Date.now() : d.getTime();
+    }
+    if (s.includes('T')) {
+        const d = new Date(s + 'Z');
+        return isNaN(d.getTime()) ? Date.now() : d.getTime();
+    }
+    s = s.replace(' ', 'T') + 'Z';
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? Date.now() : d.getTime();
 };
 
-// Helper: format elapsed time as "Xh Xm Xs"
 const formatElapsed = (ms: number): string => {
-    if (ms < 0) ms = 0;
-    const totalSec = Math.floor(ms / 1000);
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
     const h = Math.floor(totalSec / 3600);
     const m = Math.floor((totalSec % 3600) / 60);
     const s = totalSec % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
+    if (h > 0) return `${h}H ${m}M`;
+    if (m > 0) return `${m}M ${s}S`;
+    return `${s}S`;
 };
 
-// Helper: format elapsed between two dates
-const formatElapsedBetween = (startStr: string, endStr: string): string => {
-    const start = parseDate(startStr);
-    const end = parseDate(endStr);
-    if (!start || !end) return '---';
-    return formatElapsed(end.getTime() - start.getTime());
-};
-
-// Timer component that updates every second
-const ElapsedTimer = ({ since, label, colorClass }: { since: string; label?: string; colorClass?: string }) => {
-    const [elapsed, setElapsed] = useState('');
+const ElapsedTimer: React.FC<{ createdAt: string; className?: string }> = ({ createdAt, className }) => {
+    const [elapsed, setElapsed] = useState(0);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        const update = () => {
-            const d = parseDate(since);
-            if (!d) { setElapsed('---'); return; }
-            setElapsed(formatElapsed(Date.now() - d.getTime()));
-        };
-        update();
-        const interval = setInterval(update, 1000);
-        return () => clearInterval(interval);
-    }, [since]);
+        const start = parseDate(createdAt);
+        const tick = () => setElapsed(Math.max(0, Date.now() - start));
+        tick();
+        intervalRef.current = setInterval(tick, 1000);
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, [createdAt]);
 
+    const minutes = Math.floor(elapsed / 60000);
+    const colorClass = minutes < 15
+        ? 'text-blue-600'
+        : minutes < 30
+        ? 'text-amber-600'
+        : 'text-red-600';
+
+    return <span className={cn(colorClass, className)}>{formatElapsed(elapsed)}</span>;
+};
+
+const StatusLabel: React.FC<{ status: string }> = ({ status }) => {
+    const map: Record<string, { label: string; cls: string }> = {
+        pendiente: { label: 'PENDIENTE', cls: 'bg-yellow-100 text-yellow-700' },
+        recibido: { label: 'RECIBIDO', cls: 'bg-yellow-100 text-yellow-700' },
+        preparando: { label: 'PREPARANDO', cls: 'bg-blue-100 text-blue-700' },
+        listo: { label: 'LISTO', cls: 'bg-green-100 text-green-700' },
+        en_reparto: { label: 'EN REPARTO', cls: 'bg-purple-100 text-purple-700' },
+        entregado: { label: 'ENTREGADO', cls: 'bg-slate-100 text-slate-600' },
+        despachado: { label: 'DESPACHADO', cls: 'bg-slate-100 text-slate-600' },
+    };
+    const entry = map[status?.toLowerCase()] || { label: status?.toUpperCase() || '—', cls: 'bg-slate-100 text-slate-600' };
     return (
-        <span className={cn("flex items-center gap-1 tabular-nums", colorClass || "text-amber-600")}>
-            <Timer size={10} />
-            {label && <span>{label}</span>}
-            {elapsed}
+        <span className={cn('px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest', entry.cls)}>
+            {entry.label}
         </span>
     );
 };
 
-// Status label with color
-const StatusLabel = ({ status }: { status: string }) => {
-    const config: Record<string, { bg: string; text: string; label: string }> = {
-        'pending': { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'NUEVO' },
-        'en_preparacion': { bg: 'bg-orange-100', text: 'text-orange-700', label: 'EN PREPARACION' },
-        'listo': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'LISTO' },
-        'en_reparto': { bg: 'bg-purple-100', text: 'text-purple-700', label: 'EN REPARTO' },
-        'despachado': { bg: 'bg-purple-100', text: 'text-purple-700', label: 'DESPACHADO' },
-        'entregado': { bg: 'bg-green-100', text: 'text-green-600', label: 'ENTREGADO' },
-        'cancelado': { bg: 'bg-red-100', text: 'text-red-600', label: 'CANCELADO' },
-    };
-    const c = config[status] || { bg: 'bg-slate-100', text: 'text-slate-500', label: status?.toUpperCase() || '?' };
-    return <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest", c.bg, c.text)}>{c.label}</span>;
+const OrderCard: React.FC<{
+    order: Order;
+    isExpanded: boolean;
+    onToggle: () => void;
+    onLiquidar: (id: string) => void;
+    isLiquidating: boolean;
+}> = ({ order, isExpanded, onToggle, onLiquidar, isLiquidating }) => {
+    const isDelivered = order.status === 'entregado' || order.status === 'despachado';
+
+    return (
+        <div className={cn(
+            "bg-white rounded-[2rem] border overflow-hidden transition-all hover:shadow-lg",
+            order.liquidado ? "border-green-100 bg-green-50/10" : "border-slate-100"
+        )}>
+            {/* Card Header */}
+            <div className="p-5 cursor-pointer" onClick={onToggle}>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className={cn(
+                        "w-11 h-11 rounded-2xl flex items-center justify-center font-black text-xs italic shadow flex-shrink-0",
+                        order.liquidado ? "bg-green-600 text-white" : "bg-slate-900 text-yellow-400"
+                    )}>
+                        {order.liquidado ? <CheckCircle2 size={18} /> : `#${String(order.order_id || order.id).slice(-4).toUpperCase()}`}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="font-black text-slate-900 uppercase italic text-sm leading-tight truncate">
+                            {order.cliente_nombre || 'Cliente Final'}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <StatusLabel status={order.status} />
+                            {order.liquidado === 1 && (
+                                <span className="text-[8px] bg-green-100 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-widest font-black">LIQ</span>
+                            )}
+                        </div>
+                    </div>
+                    <button className="p-1.5 bg-slate-50 rounded-full text-slate-400 flex-shrink-0">
+                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                </div>
+
+                {/* Timer + Total row */}
+                <div className="flex items-center justify-between gap-3">
+                    <div className="text-left">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                            <Clock size={8} className="inline mr-1" />
+                            {new Date(parseDate(order.created_at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {isDelivered && order.delivered_at ? (
+                            <div className="bg-green-50 rounded-xl px-3 py-1.5">
+                                <p className="text-[9px] font-black text-green-500 uppercase tracking-widest">Entregado en</p>
+                                <p className="text-base font-black italic text-green-700 leading-none">
+                                    {formatElapsed(parseDate(order.delivered_at) - parseDate(order.created_at))}
+                                </p>
+                            </div>
+                        ) : !isDelivered ? (
+                            <div className={cn(
+                                "rounded-xl px-3 py-1.5",
+                                (() => {
+                                    const mins = Math.floor((Date.now() - parseDate(order.created_at)) / 60000);
+                                    return mins < 15 ? 'bg-blue-50' : mins < 30 ? 'bg-amber-50' : 'bg-red-50';
+                                })()
+                            )}>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tiempo</p>
+                                <ElapsedTimer createdAt={order.created_at} className="text-base font-black italic leading-none" />
+                            </div>
+                        ) : null}
+                    </div>
+                    <div className="text-right">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total</p>
+                        <p className="text-2xl font-black italic text-slate-900 leading-none">${order.total}</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Expanded Detail */}
+            <AnimatePresence>
+                {isExpanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden border-t border-slate-50 bg-slate-50/50"
+                    >
+                        <div className="p-5 space-y-4">
+                            {/* Items */}
+                            <div>
+                                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Productos</h4>
+                                <div className="space-y-2">
+                                    {order.items?.map((item: any, idx) => {
+                                        const price = Number(item.totalItemPrice) || (Number(item.precio_unitario || 0) * Number(item.quantity || 1));
+                                        return (
+                                            <div key={idx} className="flex justify-between items-start bg-white p-3 rounded-xl border border-slate-100">
+                                                <div>
+                                                    <p className="font-black text-slate-800 uppercase italic text-xs">
+                                                        <span className="text-red-600 mr-1.5">{item.quantity}x</span>
+                                                        {item.nombre}
+                                                    </p>
+                                                    {(item.size || item.crust) && (
+                                                        <p className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase italic flex gap-2 flex-wrap">
+                                                            {item.size && <span className="bg-slate-100 px-1.5 py-0.5 rounded">{item.size}</span>}
+                                                            {item.crust && <span className="bg-slate-100 px-1.5 py-0.5 rounded">{item.crust}</span>}
+                                                        </p>
+                                                    )}
+                                                    {item.extras && item.extras.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 mt-1">
+                                                            {item.extras.map((ex: any, i: number) => (
+                                                                <span key={i} className="text-[8px] font-bold bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100 uppercase italic">
+                                                                    +{ex.nombre}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="font-black italic text-slate-900 text-xs flex-shrink-0 ml-2">${price}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Delivery info */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="flex items-start gap-2">
+                                    <Phone size={12} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase">Teléfono</p>
+                                        <p className="text-xs font-bold text-slate-700">{order.telefono || '—'}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <MapPin size={12} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase">Dirección</p>
+                                        <p className="text-xs font-bold text-slate-700 leading-tight">{order.direccion || '—'}</p>
+                                    </div>
+                                </div>
+                                {order.repartidor && (
+                                    <div className="flex items-start gap-2">
+                                        <Bike size={12} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                                        <div>
+                                            <p className="text-[8px] font-black text-slate-400 uppercase">Repartidor</p>
+                                            <p className="text-xs font-bold text-slate-700">{order.repartidor}</p>
+                                        </div>
+                                    </div>
+                                )}
+                                {order.notas && (
+                                    <div className="flex items-start gap-2 col-span-2">
+                                        <div>
+                                            <p className="text-[8px] font-black text-slate-400 uppercase">Notas</p>
+                                            <p className="text-xs font-bold text-slate-700">{order.notas}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Liquidar button */}
+                            {!order.liquidado && (
+                                <button
+                                    onClick={() => onLiquidar(order.order_id)}
+                                    disabled={isLiquidating}
+                                    className="w-full px-4 py-3 bg-red-600 text-white rounded-xl font-black italic uppercase text-xs hover:bg-black transition-all shadow-lg shadow-red-200 disabled:opacity-50"
+                                >
+                                    {isLiquidating ? '...' : 'Liquidar Pedido'}
+                                </button>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
 };
+
+const ColumnSection: React.FC<{
+    title: string;
+    count: number;
+    icon: React.ReactNode;
+    colorClass: string;
+    orders: Order[];
+    expandedOrder: string | null;
+    onToggle: (id: string) => void;
+    onLiquidar: (id: string) => void;
+    liquidatingId: string | null;
+}> = ({ title, count, icon, colorClass, orders, expandedOrder, onToggle, onLiquidar, liquidatingId }) => (
+    <div className="flex flex-col gap-3">
+        {/* Column Header */}
+        <div className={cn("flex items-center gap-3 p-4 rounded-2xl border", colorClass)}>
+            <div className="opacity-80">{icon}</div>
+            <div className="flex-1">
+                <h3 className="font-black uppercase italic text-sm leading-none">{title}</h3>
+            </div>
+            <span className="font-black text-lg italic leading-none">{count}</span>
+        </div>
+
+        {/* Cards */}
+        {orders.length === 0 ? (
+            <div className="p-8 text-center bg-white rounded-[2rem] border border-dashed border-slate-200">
+                <p className="font-bold text-slate-300 uppercase tracking-widest text-[10px] italic">Sin pedidos</p>
+            </div>
+        ) : (
+            <div className="space-y-3">
+                {orders.map(order => (
+                    <OrderCard
+                        key={order.id}
+                        order={order}
+                        isExpanded={expandedOrder === order.id}
+                        onToggle={() => onToggle(order.id)}
+                        onLiquidar={onLiquidar}
+                        isLiquidating={liquidatingId === order.order_id}
+                    />
+                ))}
+            </div>
+        )}
+    </div>
+);
 
 const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => {
     const getLocalDate = () => {
         const now = new Date();
-        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    };
-
-    const formatTime = (dateStr: string) => {
-        const d = parseDate(dateStr);
-        if (!d) return '---';
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     };
 
     const [orders, setOrders] = useState<Order[]>([]);
@@ -126,15 +333,8 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
     const [isLoading, setIsLoading] = useState(false);
     const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
     const [isLiquidating, setIsLiquidating] = useState<string | null>(null);
-    const [, setTick] = useState(0); // Force re-render for timers
 
-    // Re-render every 10 seconds so the elapsed times update even without individual timers
-    useEffect(() => {
-        const interval = setInterval(() => setTick(t => t + 1), 10000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const fetchOrders = useCallback(async (date: string) => {
+    const fetchOrders = async (date: string) => {
         setIsLoading(true);
         try {
             const token = localStorage.getItem('capriccio_token_admin');
@@ -150,7 +350,7 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    };
 
     useEffect(() => {
         fetchOrders(filterDate);
@@ -167,20 +367,19 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
             }
         };
 
-        // Refrescar al cambiar status de pedido
-        const handleStatusUpdate = () => {
-            if (filterDate === getLocalDate()) fetchOrders(filterDate);
+        const handleStatusUpdate = (data: any) => {
+            setOrders(prev => prev.map(o =>
+                o.order_id === data.order_id ? { ...o, ...data } : o
+            ));
         };
 
         socket.on('nuevo_pedido', handleNewOrder);
         socket.on('pedido_status_update', handleStatusUpdate);
-        socket.on('pedidos_liquidados', handleStatusUpdate);
         return () => {
             socket.off('nuevo_pedido', handleNewOrder);
             socket.off('pedido_status_update', handleStatusUpdate);
-            socket.off('pedidos_liquidados', handleStatusUpdate);
         };
-    }, [filterDate, fetchOrders]);
+    }, [filterDate]);
 
     const handleLiquidar = async (orderId: string) => {
         setIsLiquidating(orderId);
@@ -194,10 +393,9 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
                 },
                 body: JSON.stringify({
                     order_ids: [orderId],
-                    liquidado_por: 'Administrador (Basico)'
+                    liquidado_por: 'Administrador (Básico)'
                 })
             });
-
             if (res.ok) {
                 await fetchOrders(filterDate);
                 if (onStatusChange) onStatusChange();
@@ -213,16 +411,31 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
         setExpandedOrder(expandedOrder === id ? null : id);
     };
 
-    // Determinar si un pedido aun no fue entregado (para mostrar timer activo)
-    const isPending = (order: Order) =>
-        !['entregado', 'cancelado'].includes(order.status);
+    // Classify orders by delivery method
+    const sortByOldest = (arr: Order[]) =>
+        [...arr].sort((a, b) => parseDate(a.created_at) - parseDate(b.created_at));
+
+    const domicilioOrders = sortByOldest(orders.filter(o =>
+        !o.liquidado && (
+            o.metodo_entrega === 'domicilio' ||
+            (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal')
+        )
+    ));
+
+    const sucursalOrders = sortByOldest(orders.filter(o =>
+        !o.liquidado && (
+            o.metodo_entrega === 'sucursal' ||
+            o.direccion === 'Recoger en sucursal'
+        )
+    ));
 
     return (
         <div className="space-y-6">
+            {/* Header + date filter */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
                 <div>
                     <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 leading-none">Listado de Pedidos</h2>
-                    <p className="text-slate-400 font-bold italic text-sm mt-1">Consulta tus ventas diarias en detalle.</p>
+                    <p className="text-slate-400 font-bold italic text-sm mt-1">Pedidos clasificados por método de entrega.</p>
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <div className="relative flex-1 md:flex-none">
@@ -237,266 +450,41 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
                 </div>
             </div>
 
-            <div className="space-y-4">
-                {isLoading ? (
-                    <div className="p-20 text-center bg-white rounded-[3rem] border border-dashed border-slate-200">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900 mx-auto mb-4"></div>
-                        <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">Cargando pedidos...</p>
-                    </div>
-                ) : orders.length === 0 ? (
-                    <div className="p-20 text-center bg-white rounded-[3rem] border border-dashed border-slate-200">
-                        <p className="font-bold text-slate-300 uppercase tracking-widest text-sm italic">No hay pedidos registrados para esta fecha</p>
-                    </div>
-                ) : (
-                    orders.map((order) => (
-                        <div
-                            key={order.id}
-                            className={cn(
-                                "bg-white rounded-[2rem] border overflow-hidden transition-all hover:shadow-lg",
-                                order.liquidado ? "border-green-100 bg-green-50/10" : "border-slate-100"
-                            )}
-                        >
-                            <div className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div className="flex items-center gap-4 cursor-pointer flex-1 min-w-0" onClick={() => toggleExpand(order.id)}>
-                                    <div className={cn(
-                                        "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm italic shadow-lg shrink-0",
-                                        order.liquidado ? "bg-green-600 text-white" : "bg-slate-900 text-yellow-400"
-                                    )}>
-                                        {order.liquidado ? <CheckCircle2 size={20} /> : `#${String(order.order_id || order.id).slice(-4).toUpperCase()}`}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="font-black text-slate-900 uppercase italic leading-none mb-1 truncate">
-                                            {order.cliente_nombre || 'Cliente Final'}
-                                            {order.liquidado === 1 && <span className="ml-2 text-[8px] bg-green-100 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-widest">LIQUIDADO</span>}
-                                        </p>
-                                        <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
-                                            <span className="flex items-center gap-1 text-slate-400">
-                                                <Clock size={10} /> {formatTime(order.created_at)}
-                                            </span>
-                                            <StatusLabel status={order.status} />
-                                            {/* Repartidor asignado */}
-                                            {order.repartidor && order.repartidor !== 'S/A' && order.repartidor !== 'sucursal' && (
-                                                <span className="flex items-center gap-1 text-purple-500">
-                                                    <Bike size={10} /> {order.repartidor}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end shrink-0">
-                                    {/* Timer grande al lado del monto */}
-                                    {isPending(order) ? (
-                                        <div className={cn(
-                                            "text-right px-4 py-2 rounded-2xl border",
-                                            (() => {
-                                                const d = parseDate(order.created_at);
-                                                if (!d) return 'bg-amber-50 border-amber-200';
-                                                const mins = (Date.now() - d.getTime()) / 60000;
-                                                if (mins > 30) return 'bg-red-50 border-red-200';
-                                                if (mins > 15) return 'bg-amber-50 border-amber-200';
-                                                return 'bg-blue-50 border-blue-200';
-                                            })()
-                                        )}>
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Tiempo</p>
-                                            <ElapsedTimer
-                                                since={order.created_at}
-                                                colorClass={cn(
-                                                    "text-xl font-black italic tabular-nums",
-                                                    (() => {
-                                                        const d = parseDate(order.created_at);
-                                                        if (!d) return 'text-amber-600';
-                                                        const mins = (Date.now() - d.getTime()) / 60000;
-                                                        if (mins > 30) return 'text-red-600';
-                                                        if (mins > 15) return 'text-amber-600';
-                                                        return 'text-blue-600';
-                                                    })()
-                                                )}
-                                            />
-                                        </div>
-                                    ) : order.status === 'entregado' && order.delivered_at ? (
-                                        <div className="text-right px-4 py-2 rounded-2xl border bg-green-50 border-green-200">
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Entregado en</p>
-                                            <p className="text-xl font-black italic text-green-600 flex items-center gap-1">
-                                                <CheckCircle2 size={16} />
-                                                {formatElapsedBetween(order.created_at, order.delivered_at)}
-                                            </p>
-                                        </div>
-                                    ) : null}
-
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total</p>
-                                        <p className="text-2xl font-black italic text-slate-900 leading-none">${Number(order.total || 0).toLocaleString()}</p>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                        {!order.liquidado && (
-                                            <button
-                                                onClick={() => handleLiquidar(order.order_id)}
-                                                disabled={isLiquidating === order.order_id}
-                                                className="px-6 py-3 bg-red-600 text-white rounded-xl font-black italic uppercase text-xs hover:bg-black transition-all shadow-lg shadow-red-200 flex items-center gap-2 disabled:opacity-50"
-                                            >
-                                                {isLiquidating === order.order_id ? "..." : "Liquidar"}
-                                            </button>
-                                        )}
-                                        <button
-                                            onClick={() => toggleExpand(order.id)}
-                                            className="p-2 bg-slate-50 rounded-full text-slate-400"
-                                        >
-                                            {expandedOrder === order.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <AnimatePresence>
-                                {expandedOrder === order.id && (
-                                    <motion.div
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        className="overflow-hidden border-t border-slate-50 bg-slate-50/50"
-                                    >
-                                        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            {/* Detalle de productos */}
-                                            <div className="space-y-4">
-                                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Detalle de Productos</h4>
-                                                <div className="space-y-3">
-                                                    {order.items?.map((item: any, idx) => {
-                                                        const price = Number(item.totalItemPrice) || (Number(item.precio_unitario || 0) * Number(item.quantity || 1));
-                                                        return (
-                                                            <div key={idx} className="flex flex-col bg-white p-4 rounded-2xl border border-slate-100">
-                                                                <div className="flex justify-between items-start">
-                                                                    <div>
-                                                                        <p className="font-black text-slate-800 uppercase italic text-sm">
-                                                                            <span className="text-red-600 mr-2">{item.quantity}x</span>
-                                                                            {item.nombre}
-                                                                        </p>
-                                                                        {(item.size || item.crust) && (
-                                                                            <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase italic flex items-center gap-2 flex-wrap">
-                                                                                {item.size && <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">TAMANO: {item.size}</span>}
-                                                                                {item.crust && <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">ORILLA: {item.crust}</span>}
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="font-black italic text-slate-900 text-sm shrink-0 ml-2">
-                                                                        ${price > 0 ? price.toLocaleString() : '---'}
-                                                                    </div>
-                                                                </div>
-
-                                                                {item.extras && item.extras.length > 0 && (
-                                                                    <div className="mt-3 pt-3 border-t border-slate-50 flex flex-wrap gap-2">
-                                                                        {item.extras.map((ex: any, i: number) => (
-                                                                            <span key={i} className="text-[9px] font-bold bg-yellow-50 text-yellow-700 px-2 py-1 rounded-lg border border-yellow-100 uppercase italic">
-                                                                                + {ex.nombre}
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-
-                                            {/* Informacion de Entrega */}
-                                            <div className="space-y-4">
-                                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Informacion de Entrega</h4>
-                                                <div className="grid grid-cols-1 gap-4">
-                                                    <div className="flex items-start gap-3">
-                                                        <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-400 shrink-0">
-                                                            <Phone size={14} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[9px] font-black text-slate-400 uppercase">Telefono</p>
-                                                            <p className="text-xs font-bold text-slate-700">{order.telefono || 'Sin telefono'}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-start gap-3">
-                                                        <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-400 shrink-0">
-                                                            <MapPin size={14} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[9px] font-black text-slate-400 uppercase">Direccion</p>
-                                                            <p className="text-xs font-bold text-slate-700 leading-relaxed">{order.direccion || 'Entrega en sucursal'}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Repartidor asignado */}
-                                                    {order.repartidor && order.repartidor !== 'S/A' && (
-                                                        <div className="flex items-start gap-3">
-                                                            <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-500 shrink-0">
-                                                                <Bike size={14} />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[9px] font-black text-slate-400 uppercase">Repartidor</p>
-                                                                <p className="text-xs font-bold text-purple-700">{order.repartidor === 'sucursal' ? 'Entrega en sucursal' : order.repartidor}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Metodo de entrega */}
-                                                    {order.metodo_entrega && (
-                                                        <div className="flex items-start gap-3">
-                                                            <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-400 shrink-0">
-                                                                <Package size={14} />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[9px] font-black text-slate-400 uppercase">Metodo de Entrega</p>
-                                                                <p className="text-xs font-bold text-slate-700 capitalize">{order.metodo_entrega}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Notas */}
-                                                    {order.notas && (
-                                                        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
-                                                            <p className="text-[9px] font-black text-amber-600 uppercase mb-1">Notas del Cliente</p>
-                                                            <p className="text-xs font-bold text-amber-800 italic">{order.notas}</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Tiempos */}
-                                                <div className="mt-4 bg-white rounded-2xl border border-slate-100 p-4 space-y-3">
-                                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tiempos</h4>
-                                                    <div className="grid grid-cols-2 gap-3 text-xs">
-                                                        <div>
-                                                            <p className="text-[9px] font-black text-slate-400 uppercase">Recibido</p>
-                                                            <p className="font-bold text-slate-700">{formatTime(order.created_at)}</p>
-                                                        </div>
-                                                        {order.delivered_at && (
-                                                            <div>
-                                                                <p className="text-[9px] font-black text-slate-400 uppercase">Entregado</p>
-                                                                <p className="font-bold text-slate-700">{formatTime(order.delivered_at)}</p>
-                                                            </div>
-                                                        )}
-                                                        {order.status === 'entregado' && order.delivered_at ? (
-                                                            <div className="col-span-2 bg-green-50 rounded-xl p-3 border border-green-100">
-                                                                <p className="text-[9px] font-black text-green-600 uppercase">Tiempo Total de Entrega</p>
-                                                                <p className="font-black text-green-700 text-lg italic">
-                                                                    {formatElapsedBetween(order.created_at, order.delivered_at)}
-                                                                </p>
-                                                            </div>
-                                                        ) : isPending(order) ? (
-                                                            <div className="col-span-2 bg-amber-50 rounded-xl p-3 border border-amber-100">
-                                                                <p className="text-[9px] font-black text-amber-600 uppercase">Tiempo Transcurrido</p>
-                                                                <p className="font-black text-amber-700 text-lg italic">
-                                                                    <ElapsedTimer since={order.created_at} colorClass="text-amber-700 text-lg" />
-                                                                </p>
-                                                            </div>
-                                                        ) : null}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    ))
-                )}
-            </div>
+            {isLoading ? (
+                <div className="p-20 text-center bg-white rounded-[3rem] border border-dashed border-slate-200">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900 mx-auto mb-4"></div>
+                    <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">Cargando pedidos...</p>
+                </div>
+            ) : orders.length === 0 ? (
+                <div className="p-20 text-center bg-white rounded-[3rem] border border-dashed border-slate-200">
+                    <p className="font-bold text-slate-300 uppercase tracking-widest text-sm italic">No hay pedidos registrados para esta fecha</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <ColumnSection
+                        title="A Domicilio"
+                        count={domicilioOrders.length}
+                        icon={<Bike size={20} />}
+                        colorClass="bg-blue-50 border-blue-100 text-blue-800"
+                        orders={domicilioOrders}
+                        expandedOrder={expandedOrder}
+                        onToggle={toggleExpand}
+                        onLiquidar={handleLiquidar}
+                        liquidatingId={isLiquidating}
+                    />
+                    <ColumnSection
+                        title="Para Recoger"
+                        count={sucursalOrders.length}
+                        icon={<Store size={20} />}
+                        colorClass="bg-amber-50 border-amber-100 text-amber-800"
+                        orders={sucursalOrders}
+                        expandedOrder={expandedOrder}
+                        onToggle={toggleExpand}
+                        onLiquidar={handleLiquidar}
+                        liquidatingId={isLiquidating}
+                    />
+                </div>
+            )}
         </div>
     );
 };

@@ -88,7 +88,7 @@ const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, on
               <input
                 type="number"
                 id="efectivo_inicial"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900 bg-white"
                 placeholder="Ej: 50000"
                 defaultValue="0"
               />

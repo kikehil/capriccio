@@ -445,13 +445,14 @@ app.post('/api/pedidos', async (req, res) => {
         }
 
         await connection.commit();
-        io.emit('nuevo_pedido', { 
-            cliente_nombre, 
-            telefono, 
-            direccion, 
-            order_id: orderId, 
-            total: validatedTotal, 
+        io.emit('nuevo_pedido', {
+            cliente_nombre,
+            telefono,
+            direccion,
+            order_id: orderId,
+            total: validatedTotal,
             status: 'pendiente',
+            metodo_entrega: metodo_entrega || 'domicilio',
             items: validatedItems,
             created_at: new Date().toISOString()
         });
@@ -1410,7 +1411,7 @@ app.get('/api/caja/turno/activo', authorize(['admin', 'caja', 'responsable']), a
 });
 
 // PATCH /api/caja/turno/:id/cerrar — Cierra un turno de caja
-app.patch('/api/caja/turno/:id/cerrar', authorize(['admin', 'responsable']), async (req, res) => {
+app.patch('/api/caja/turno/:id/cerrar', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
     const { id } = req.params;
     const { efectivo_reportado, notas } = req.body;
 
@@ -1439,7 +1440,7 @@ app.patch('/api/caja/turno/:id/cerrar', authorize(['admin', 'responsable']), asy
         // Actualizar turno
         const updateResult = await db.query(
             `UPDATE caja_turno
-             SET cerrado_at = NOW(), efectivo_recibido = $1, efectivo_reportado = $2, diferencia = $3
+             SET cerrado_at = CURRENT_TIMESTAMP, efectivo_recibido = $1, efectivo_reportado = $2, diferencia = $3
              WHERE id = $4
              RETURNING *`,
             [efectivo_recibido, efectivo_reportado || 0, diferencia, id]
