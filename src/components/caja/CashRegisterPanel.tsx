@@ -24,6 +24,19 @@ const CashRegisterPanel: React.FC<CashRegisterPanelProps> = ({ turno }) => {
     total_ingresos: 0,
   });
   const [loading, setLoading] = useState(true);
+  // Duración calculada por el servidor (segundos), libre de timezone
+  const [duracionBase, setDuracionBase] = useState<number>(0);
+  const [duracionBaseAt, setDuracionBaseAt] = useState<number>(Date.now());
+  const [horaAperturaUTC, setHoraAperturaUTC] = useState<string>('');
+  const [tickSecs, setTickSecs] = useState<number>(0);
+
+  // Ticker de 1 segundo para la duración live
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTickSecs(Math.floor((Date.now() - duracionBaseAt) / 1000));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [duracionBaseAt]);
 
   useEffect(() => {
     fetchStats();
@@ -47,6 +60,15 @@ const CashRegisterPanel: React.FC<CashRegisterPanelProps> = ({ turno }) => {
           total_tarjeta: resumen.total_tarjeta || 0,
           total_ingresos: (resumen.total_efectivo || 0) + (resumen.total_tarjeta || 0),
         });
+        // Sincronizar duración desde el servidor (evita drift de timezone)
+        if (data.turno?.duracion_segundos != null) {
+          setDuracionBase(Number(data.turno.duracion_segundos));
+          setDuracionBaseAt(Date.now());
+          setTickSecs(0);
+        }
+        if (data.turno?.hora_apertura_utc) {
+          setHoraAperturaUTC(data.turno.hora_apertura_utc);
+        }
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -122,28 +144,19 @@ const CashRegisterPanel: React.FC<CashRegisterPanelProps> = ({ turno }) => {
           <div>
             <p className="text-gray-600 text-sm">Hora de Apertura</p>
             <p className="font-bold text-lg text-gray-800">
-              {(() => {
-                const raw = turno.abierto_at || '';
-                const iso = raw.includes('T') ? raw : raw.replace(' ', 'T');
-                return new Date(iso.endsWith('Z') ? iso : iso + 'Z').toLocaleTimeString('es-CL');
-              })()}
+              {horaAperturaUTC || (turno.abierto_at ? turno.abierto_at.split(' ')[1] || '—' : '—')}
+              <span className="text-xs text-gray-400 ml-1">UTC</span>
             </p>
           </div>
           <div>
             <p className="text-gray-600 text-sm">Duración del Turno</p>
             <p className="font-bold text-lg text-gray-800">
               {(() => {
-                // El VPS almacena en UTC (usa datetime('now','localtime') con VPS en UTC)
-                // Forzamos parseo como UTC para evitar doble conversión de zona horaria
-                const raw = turno.abierto_at || '';
-                const iso = raw.includes('T') ? raw : raw.replace(' ', 'T');
-                const opening = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
-                const diffMs = Date.now() - opening.getTime();
-                if (diffMs < 0) return '0h 0m';
-                const totalMins = Math.floor(diffMs / 60000);
-                const hours = Math.floor(totalMins / 60);
-                const mins = totalMins % 60;
-                return `${hours}h ${mins}m`;
+                const totalSecs = duracionBase + tickSecs;
+                if (totalSecs < 0) return '0h 0m';
+                const h = Math.floor(totalSecs / 3600);
+                const m = Math.floor((totalSecs % 3600) / 60);
+                return `${h}h ${m}m`;
               })()}
             </p>
           </div>

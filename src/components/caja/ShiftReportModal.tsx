@@ -125,9 +125,9 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({ turno, onClose }) =
               <p className="text-gray-600">Hora de Apertura</p>
               <p className="font-semibold text-gray-800">
                 {(() => {
-                  const raw = turno.abierto_at || '';
-                  const iso = raw.includes('T') ? raw : raw.replace(' ', 'T');
-                  return new Date(iso.endsWith('Z') ? iso : iso + 'Z').toLocaleTimeString('es-CL');
+                  const t = turno as any;
+                  if (t.hora_apertura_utc) return t.hora_apertura_utc + ' UTC';
+                  return turno.abierto_at ? turno.abierto_at.split(' ')[1] || turno.abierto_at : '—';
                 })()}
               </p>
             </div>
