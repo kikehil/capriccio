@@ -1411,7 +1411,7 @@ app.get('/api/caja/turno/activo', authorize(['admin', 'caja', 'responsable']), a
 });
 
 // PATCH /api/caja/turno/:id/cerrar — Cierra un turno de caja
-app.patch('/api/caja/turno/:id/cerrar', authorize(['admin', 'responsable']), async (req, res) => {
+app.patch('/api/caja/turno/:id/cerrar', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
     const { id } = req.params;
     const { efectivo_reportado, notas } = req.body;
 
