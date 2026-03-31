@@ -18,6 +18,7 @@ interface KitchenOrder {
     order_id: string;
     metodo_entrega?: string;
     direccion?: string;
+    order_origin?: string;
 }
 
 // Intenta renovar el token silenciosamente; devuelve true si tuvo éxito
@@ -352,92 +353,82 @@ const KitchenDisplay = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* ── COLUMNA 1: A DOMICILIO ─────────────────────────────────── */}
-                    <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-blue-900/40 border border-blue-700/40">
-                            <Bike className="text-blue-400" size={22} />
-                            <h2 className="text-sm font-black uppercase italic tracking-widest text-blue-300 flex-1">Entrega a Domicilio</h2>
-                            <span className="text-lg font-black italic text-blue-400">
-                                {orders.filter(o => o.metodo_entrega === 'domicilio' || (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal')).length}
-                            </span>
-                        </div>
-                        <AnimatePresence mode="popLayout">
-                            {orders
-                                .filter(o => o.metodo_entrega === 'domicilio' || (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal'))
-                                .map(order => (
-                                    <OrderCard
-                                        key={order.id}
-                                        order={order}
-                                        onComplete={completeOrder}
-                                        onCompleteInStore={completeInStore}
-                                        onStartPreparation={startPreparation}
-                                    />
-                                ))}
-                        </AnimatePresence>
-                        {isLoaded && orders.filter(o => o.metodo_entrega === 'domicilio' || (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal')).length === 0 && (
-                            <div className="py-16 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-[2rem]">
-                                <p className="text-xs font-black italic uppercase tracking-widest text-slate-700 opacity-50">Sin pedidos</p>
-                            </div>
-                        )}
-                    </div>
+                    {(() => {
+                        // Clasificación:
+                        // Para Llevar = para_llevar (POS take-away)
+                        //             + sucursal con order_origin='web' (cliente recoge pedido online)
+                        //             + direccion='Recoger en sucursal' (fallback legacy)
+                        // Consumo en Sucursal = sucursal sin origin web (POS comer en restaurante)
+                        const isParaLlevar = (o: KitchenOrder) =>
+                            o.metodo_entrega === 'para_llevar' ||
+                            (o.metodo_entrega === 'sucursal' && (o.order_origin === 'web' || o.direccion === 'Recoger en sucursal'));
 
-                    {/* ── COLUMNA 2: PARA LLEVAR ─────────────────────────────────── */}
-                    <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-green-900/40 border border-green-700/40">
-                            <ShoppingBag className="text-green-400" size={22} />
-                            <h2 className="text-sm font-black uppercase italic tracking-widest text-green-300 flex-1">Para Llevar</h2>
-                            <span className="text-lg font-black italic text-green-400">
-                                {orders.filter(o => o.metodo_entrega === 'para_llevar').length}
-                            </span>
-                        </div>
-                        <AnimatePresence mode="popLayout">
-                            {orders
-                                .filter(o => o.metodo_entrega === 'para_llevar')
-                                .map(order => (
-                                    <OrderCard
-                                        key={order.id}
-                                        order={order}
-                                        onComplete={completeOrder}
-                                        onCompleteInStore={completeInStore}
-                                        onStartPreparation={startPreparation}
-                                    />
-                                ))}
-                        </AnimatePresence>
-                        {isLoaded && orders.filter(o => o.metodo_entrega === 'para_llevar').length === 0 && (
-                            <div className="py-16 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-[2rem]">
-                                <p className="text-xs font-black italic uppercase tracking-widest text-slate-700 opacity-50">Sin pedidos</p>
-                            </div>
-                        )}
-                    </div>
+                        const isConsumoSucursal = (o: KitchenOrder) =>
+                            o.metodo_entrega === 'sucursal' && o.order_origin !== 'web' && o.direccion !== 'Recoger en sucursal';
 
-                    {/* ── COLUMNA 3: CONSUMO EN SUCURSAL ────────────────────────── */}
-                    <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-900/40 border border-amber-700/40">
-                            <Store className="text-amber-400" size={22} />
-                            <h2 className="text-sm font-black uppercase italic tracking-widest text-amber-300 flex-1">Consumo en Sucursal</h2>
-                            <span className="text-lg font-black italic text-amber-400">
-                                {orders.filter(o => o.metodo_entrega === 'sucursal' || o.direccion === 'Recoger en sucursal').length}
-                            </span>
-                        </div>
-                        <AnimatePresence mode="popLayout">
-                            {orders
-                                .filter(o => o.metodo_entrega === 'sucursal' || o.direccion === 'Recoger en sucursal')
-                                .map(order => (
-                                    <OrderCard
-                                        key={order.id}
-                                        order={order}
-                                        onComplete={completeOrder}
-                                        onCompleteInStore={completeInStore}
-                                        onStartPreparation={startPreparation}
-                                    />
-                                ))}
-                        </AnimatePresence>
-                        {isLoaded && orders.filter(o => o.metodo_entrega === 'sucursal' || o.direccion === 'Recoger en sucursal').length === 0 && (
+                        const isDomicilio = (o: KitchenOrder) =>
+                            o.metodo_entrega === 'domicilio' ||
+                            (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal' && !isConsumoSucursal(o));
+
+                        const domicilioList = orders.filter(isDomicilio);
+                        const paraLlevarList = orders.filter(isParaLlevar);
+                        const consumoList = orders.filter(isConsumoSucursal);
+
+                        const EmptyLane = () => (
                             <div className="py-16 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-[2rem]">
                                 <p className="text-xs font-black italic uppercase tracking-widest text-slate-700 opacity-50">Sin pedidos</p>
                             </div>
-                        )}
-                    </div>
+                        );
+
+                        return (
+                            <>
+                                {/* ── COLUMNA 1: A DOMICILIO ─────────────────────── */}
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-blue-900/40 border border-blue-700/40">
+                                        <Bike className="text-blue-400" size={22} />
+                                        <h2 className="text-sm font-black uppercase italic tracking-widest text-blue-300 flex-1">Entrega a Domicilio</h2>
+                                        <span className="text-lg font-black italic text-blue-400">{domicilioList.length}</span>
+                                    </div>
+                                    <AnimatePresence mode="popLayout">
+                                        {domicilioList.map(order => (
+                                            <OrderCard key={order.id} order={order} onComplete={completeOrder} onCompleteInStore={completeInStore} onStartPreparation={startPreparation} />
+                                        ))}
+                                    </AnimatePresence>
+                                    {isLoaded && domicilioList.length === 0 && <EmptyLane />}
+                                </div>
+
+                                {/* ── COLUMNA 2: PARA LLEVAR ─────────────────────── */}
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-green-900/40 border border-green-700/40">
+                                        <ShoppingBag className="text-green-400" size={22} />
+                                        <h2 className="text-sm font-black uppercase italic tracking-widest text-green-300 flex-1">Para Llevar / Recoger</h2>
+                                        <span className="text-lg font-black italic text-green-400">{paraLlevarList.length}</span>
+                                    </div>
+                                    <AnimatePresence mode="popLayout">
+                                        {paraLlevarList.map(order => (
+                                            <OrderCard key={order.id} order={order} onComplete={completeOrder} onCompleteInStore={completeInStore} onStartPreparation={startPreparation} />
+                                        ))}
+                                    </AnimatePresence>
+                                    {isLoaded && paraLlevarList.length === 0 && <EmptyLane />}
+                                </div>
+
+                                {/* ── COLUMNA 3: CONSUMO EN SUCURSAL ─────────────── */}
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-900/40 border border-amber-700/40">
+                                        <Store className="text-amber-400" size={22} />
+                                        <h2 className="text-sm font-black uppercase italic tracking-widest text-amber-300 flex-1">Consumo en Sucursal</h2>
+                                        <span className="text-lg font-black italic text-amber-400">{consumoList.length}</span>
+                                    </div>
+                                    <AnimatePresence mode="popLayout">
+                                        {consumoList.map(order => (
+                                            <OrderCard key={order.id} order={order} onComplete={completeOrder} onCompleteInStore={completeInStore} onStartPreparation={startPreparation} />
+                                        ))}
+                                    </AnimatePresence>
+                                    {isLoaded && consumoList.length === 0 && <EmptyLane />}
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
             )}
         </div>
