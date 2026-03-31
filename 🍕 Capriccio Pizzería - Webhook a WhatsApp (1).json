@@ -1,0 +1,236 @@
+{
+  "name": "🍕 Capriccio Pizzería - Webhook a WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nuevo-pedido",
+        "options": {}
+      },
+      "id": "1bdc5d5e-1d1f-497e-8cee-fdc90854821c",
+      "name": "Webhook Nuevo Pedido",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -640,
+        96
+      ],
+      "webhookId": "capriccio-nuevo-pedido"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pedido = $input.all()[0].json.body;\n\n// Formateamos la lista de artículos\nlet listaArticulos = \"\";\nif (pedido.lista_articulos && Array.isArray(pedido.lista_articulos)) {\n  pedido.lista_articulos.forEach(item => {\n    listaArticulos += `▪️ ${item.cantidad}x ${item.producto} (${item.tamano})\\n`;\n    if (item.orilla_extra && item.orilla_extra !== 'Normal') {\n        listaArticulos += `   ${item.orilla_extra}\\n`;\n    }\n  });\n}\n\n// Generamos el link de Google Maps si hay coordenadas\nlet linkMapa = \"No proporcionada\";\nif (pedido.coordenadas) {\n  linkMapa = `https://maps.google.com/?q=${pedido.coordenadas.replace(' ', '')}`;\n}\n\n// Armamos el \"Ticket\" final de WhatsApp\nconst mensajeTicket = `\n***********************************************\n* 🚨 *¡NUEVO PEDIDO CAPRICCIO!* 🚨            *\n* #Orden: ${Math.floor(Math.random() * 10000)}*\n***********************************************\n👤 *Cliente:* ${pedido.cliente_nombre}\n📞 *Tel:* ${pedido.cliente_telefono}\n💳 *Pago:* ${pedido.metodo_pago}\n\n🛒 *DETALLE DEL PEDIDO:*\n${listaArticulos}\n💰 *TOTAL A COBRAR: $${pedido.total_pagar}*\n\n🛵 *DATOS DE ENTREGA:*\n📍 *Dirección:* ${pedido.direccion_entrega}\n🗺️ *Google Maps:* ${linkMapa}\n`;\n\n// Armamos el mensaje para el cliente\nconst mensajeCliente = `¡Hola ${pedido.cliente_nombre}! 🍕\\n\\nTu pedido en Capriccio Pizzería ha sido recibido y ya lo estamos preparando:\\n\\n🛒 *Detalle:*\\n${listaArticulos}\\n💰 *Total a pagar: $${pedido.total_pagar}*\\n\\n📍 *Entrega en:* ${pedido.direccion_entrega}\\n\\n¡Gracias por tu preferencia! 🔥🛵`;\n\nreturn [\n  {\n    json: {\n      mensaje_formateado: mensajeTicket,\n      mensaje_cliente: mensajeCliente,\n      telefono_destino: \"52\" + pedido.cliente_telefono,\n      nombre_cliente: pedido.cliente_nombre\n    }\n  }\n];"
+      },
+      "id": "58da0fb8-e52f-41b7-bd4b-7443af30c428",
+      "name": "Generar Ticket de WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://rentame-evolution-api.amv1ou.easypanel.host/message/sendText/pizza",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "DF0ACCC20D48-4293-A570-A30D6C532231"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "528334388782"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Generar Ticket de WhatsApp').item.json.mensaje_formateado }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "59d91ba3-503d-4955-aeda-27be321473b2",
+      "name": "Notificación Cocina / Admin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        208,
+        0
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://rentame-evolution-api.amv1ou.easypanel.host/message/sendText/pizza",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "DF0ACCC20D48-4293-A570-A30D6C532231"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $json.telefono_destino }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Generar Ticket de WhatsApp').item.json.mensaje_cliente }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "88ae80cd-504c-43b4-8d1a-6c98a0c17e8e",
+      "name": "Confirmación Automática al Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        208,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7fcdcf1f-a336-4fc9-95b2-3cb5abbdf8c3",
+              "name": "numero_cocina",
+              "value": "8334388782",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -192,
+        -16
+      ],
+      "id": "dfe6de42-0fc2-4dcb-9d2c-62ab2fad6460",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {
+    "Webhook Nuevo Pedido": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n-n8n.amv1ou.easypanel.host",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            "content-length": "370",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "es-US,es-419;q=0.9,es;q=0.8,en;q=0.7",
+            "content-type": "application/json",
+            "origin": "http://localhost:3000",
+            "priority": "u=1, i",
+            "referer": "http://localhost:3000/",
+            "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"Google Chrome\";v=\"145\", \"Chromium\";v=\"145\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "x-forwarded-for": "187.153.7.81",
+            "x-forwarded-host": "n8n-n8n.amv1ou.easypanel.host",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "3226dcc2103b",
+            "x-real-ip": "187.153.7.81"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "cliente_nombre": "enrique",
+            "cliente_telefono": "8334388034",
+            "direccion_entrega": "Privada Rafaél Lucio, Pánuco, Veracruz, 93990, México",
+            "referencias": "",
+            "coordenadas": "22.041404, -98.185466",
+            "metodo_pago": "Efectivo",
+            "total_pagar": 195,
+            "lista_articulos": [
+              {
+                "cantidad": 1,
+                "producto": "Pepperoni Capriccio",
+                "tamano": "Mediana",
+                "orilla_extra": "Normal",
+                "precio_unitario": 195
+              }
+            ]
+          },
+          "webhookUrl": "https://n8n-n8n.amv1ou.easypanel.host/webhook/nuevo-pedido",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook Nuevo Pedido": {
+      "main": [
+        [
+          {
+            "node": "Generar Ticket de WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Ticket de WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Confirmación Automática al Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Notificación Cocina / Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a56b924c-f609-4dc5-b44d-b169df971951",
+  "meta": {
+    "instanceId": "ed2673141a0b36e42efb4efed10d2c92cd5a12e1f745cceb1b203cb86a96fbb1"
+  },
+  "id": "rNzj7cQBlhOiPYw3",
+  "tags": []
+}

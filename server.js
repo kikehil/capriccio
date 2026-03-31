@@ -1366,6 +1366,304 @@ app.post('/api/pedidos/:id/calificacion', authenticateCliente, async (req, res) 
 });
 
 // ============================================================
+// ───── ENDPOINTS DE CAJA (POS - PUNTO DE VENTA) ────────────
+// ============================================================
+
+// POST /api/caja/turno/abrir — Abre un turno de caja
+app.post('/api/caja/turno/abrir', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
+    const { efectivo_inicial } = req.body;
+    const negocio_id = 1; // En producción, obtener del negocio del usuario
+
+    try {
+        const result = await db.query(
+            `INSERT INTO caja_turno (cajero_id, cajero_nombre, negocio_id, efectivo_inicial)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, abierto_at, efectivo_inicial`,
+            [req.user.id, req.user.username, negocio_id, efectivo_inicial || 0]
+        );
+        res.json(result.rows[0]);
+        io.emit('turno_abierto', { turno_id: result.rows[0].id, cajero: req.user.username });
+    } catch (e) {
+        console.error('Error al abrir turno:', e);
+        res.status(500).json({ error: 'Error al abrir turno' });
+    }
+});
+
+// GET /api/caja/turno/activo — Obtiene el turno activo del cajero
+app.get('/api/caja/turno/activo', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
+    const negocio_id = 1;
+
+    try {
+        const result = await db.query(
+            `SELECT * FROM caja_turno
+             WHERE cajero_id = $1 AND cerrado_at IS NULL AND negocio_id = $2
+             ORDER BY abierto_at DESC LIMIT 1`,
+            [req.user.id, negocio_id]
+        );
+        if (result.rows.length === 0) {
+            return res.json(null);
+        }
+        res.json(result.rows[0]);
+    } catch (e) {
+        console.error('Error al obtener turno activo:', e);
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+// PATCH /api/caja/turno/:id/cerrar — Cierra un turno de caja
+app.patch('/api/caja/turno/:id/cerrar', authorize(['admin', 'responsable']), async (req, res) => {
+    const { id } = req.params;
+    const { efectivo_reportado, notas } = req.body;
+
+    try {
+        // Obtener el turno
+        const turnoResult = await db.query(
+            'SELECT * FROM caja_turno WHERE id = $1',
+            [id]
+        );
+        if (turnoResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Turno no encontrado' });
+        }
+
+        const turno = turnoResult.rows[0];
+
+        // Calcular dinero recibido (suma de pagos en este turno)
+        const pagosResult = await db.query(
+            'SELECT SUM(monto) as total FROM caja_pagos_detalle WHERE turno_id = $1',
+            [id]
+        );
+        const efectivo_recibido = pagosResult.rows[0].total || 0;
+
+        // Calcular diferencia
+        const diferencia = efectivo_recibido - (efectivo_reportado || 0);
+
+        // Actualizar turno
+        const updateResult = await db.query(
+            `UPDATE caja_turno
+             SET cerrado_at = NOW(), efectivo_recibido = $1, efectivo_reportado = $2, diferencia = $3
+             WHERE id = $4
+             RETURNING *`,
+            [efectivo_recibido, efectivo_reportado || 0, diferencia, id]
+        );
+
+        res.json(updateResult.rows[0]);
+        io.emit('turno_cerrado', { turno_id: id, cajero: turno.cajero_nombre, total: efectivo_recibido });
+    } catch (e) {
+        console.error('Error al cerrar turno:', e);
+        res.status(500).json({ error: 'Error al cerrar turno' });
+    }
+});
+
+// POST /api/caja/pedidos — Crear pedido desde POS (Punto de Venta)
+app.post('/api/caja/pedidos', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
+    const {
+        cliente_nombre, telefono, direccion, referencias, items,
+        order_origin, metodo_entrega, payment_method, monto_recibido, turno_id
+    } = req.body;
+
+    try {
+        // Validar datos básicos
+        if (!cliente_nombre || !items || items.length === 0) {
+            return res.status(400).json({ error: 'Datos incompletos' });
+        }
+
+        // Generar order_id único
+        const order_id = 'ord-' + Math.random().toString(16).substr(2, 8).toUpperCase();
+
+        // Calcular total validando precios en servidor
+        let total = 0;
+        for (const item of items) {
+            total += (item.precio_unitario || 0) * item.cantidad;
+            if (item.extras) {
+                for (const extra of item.extras) {
+                    total += (extra.precio || 0) * item.cantidad;
+                }
+            }
+        }
+
+        // Validar que monto_recibido >= total si se paga en caja
+        if (payment_method !== 'no_pago' && (monto_recibido || 0) < total) {
+            return res.status(400).json({ error: 'Monto insuficiente' });
+        }
+
+        const negocio_id = 1;
+
+        // Crear pedido
+        const pedidoResult = await db.query(
+            `INSERT INTO pedidos
+             (order_id, cliente_nombre, telefono, direccion, referencias, total, status,
+              negocio_id, telefono_cliente, metodo_entrega,
+              order_origin, cajero_id, cajero_nombre, payment_method, monto_recibido, pagado_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+             RETURNING id, order_id, total`,
+            [
+                order_id, cliente_nombre, telefono, direccion, referencias || null, total,
+                'recibido', negocio_id, telefono || null, metodo_entrega,
+                order_origin, req.user.id, req.user.username, payment_method,
+                monto_recibido || null, payment_method !== 'no_pago' ? new Date().toISOString() : null
+            ]
+        );
+
+        const pedido_id = pedidoResult.rows[0].id;
+
+        // Agregar detalles de pedido
+        for (const item of items) {
+            const detalleResult = await db.query(
+                `INSERT INTO detalle_pedidos
+                 (pedido_id, pizza_nombre, cantidad, precio_unitario, size, crust)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 RETURNING id`,
+                [pedido_id, item.pizza_nombre, item.cantidad, item.precio_unitario || 0, item.size || null, item.crust || null]
+            );
+
+            // Agregar extras si existen
+            if (item.extras && item.extras.length > 0) {
+                for (const extra of item.extras) {
+                    await db.query(
+                        `INSERT INTO extras_pedidos (detalle_id, extra_nombre, precio_extra)
+                         VALUES ($1, $2, $3)`,
+                        [detalleResult.rows[0].id, extra.nombre, extra.precio || 0]
+                    );
+                }
+            }
+        }
+
+        // Registrar pago si se realizó
+        if (payment_method !== 'no_pago' && turno_id) {
+            const cambio = monto_recibido - total;
+            await db.query(
+                `INSERT INTO caja_pagos_detalle (turno_id, pedido_id, monto, payment_method, cambio_entregado)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [turno_id, pedido_id, total, payment_method, cambio > 0 ? cambio : 0]
+            );
+        }
+
+        // 📱 Enviar notificación push al cliente
+        if (telefono) {
+            const shortId = order_id.split('-')[1] || order_id.slice(-4).toUpperCase();
+            sendPushToCliente(telefono, {
+                title: '🍕 ¡Pedido Confirmado en Capriccio!',
+                body: `Tu orden #${shortId} fue recibida. Estamos preparando tu pizza con todo el sabor.`,
+                url: '/?open=pedidos',
+                tag: `pedido-${order_id}`,
+                icon: '/icons/icon-192x192.png',
+                badge: '/icons/icon-72x72.png',
+            });
+        }
+
+        // Emitir evento Socket para Kitchen Display (mismo evento que pedidos web)
+        io.emit('nuevo_pedido', {
+            cliente_nombre,
+            telefono,
+            direccion,
+            order_id,
+            total,
+            status: 'recibido',
+            metodo_entrega,
+            order_origin,
+            items: items.map(i => ({
+                nombre: i.pizza_nombre,
+                quantity: i.cantidad,
+                totalItemPrice: i.precio_unitario,
+                size: i.size || null,
+                crust: i.crust || null,
+                extras: i.extras || []
+            })),
+            created_at: new Date().toISOString()
+        });
+        // También emitir evento específico de caja para otros módulos
+        io.emit('nuevo_pedido_caja', {
+            pedido: pedidoResult.rows[0],
+            origin: order_origin,
+            turno_id,
+            items_count: items.length
+        });
+
+        res.json({
+            success: true,
+            order_id: pedidoResult.rows[0].order_id,
+            cambio: monto_recibido > 0 ? monto_recibido - total : 0,
+            total: total
+        });
+    } catch (e) {
+        console.error('Error al crear pedido en caja:', e);
+        res.status(500).json({ error: 'Error al crear pedido' });
+    }
+});
+
+// GET /api/caja/pedidos/turno/:turno_id — Obtiene todos los pedidos de un turno
+app.get('/api/caja/pedidos/turno/:turno_id', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
+    const { turno_id } = req.params;
+
+    try {
+        const result = await db.query(
+            `SELECT p.* FROM pedidos p
+             INNER JOIN caja_pagos_detalle cpd ON p.id = cpd.pedido_id
+             WHERE cpd.turno_id = $1
+             ORDER BY p.created_at DESC`,
+            [turno_id]
+        );
+        res.json(result.rows);
+    } catch (e) {
+        console.error('Error:', e);
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+// GET /api/caja/reporte/turno/:turno_id — Obtiene reporte de un turno
+app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'responsable']), async (req, res) => {
+    const { turno_id } = req.params;
+
+    try {
+        const turnoResult = await db.query(
+            'SELECT * FROM caja_turno WHERE id = $1',
+            [turno_id]
+        );
+
+        if (turnoResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Turno no encontrado' });
+        }
+
+        const turno = turnoResult.rows[0];
+
+        // Obtener órdenes del turno
+        const ordenesResult = await db.query(
+            `SELECT p.*, COUNT(dp.id) as items_count
+             FROM pedidos p
+             LEFT JOIN detalle_pedidos dp ON p.id = dp.pedido_id
+             WHERE p.cajero_id = $1 AND DATE(p.created_at) = DATE($2)
+             GROUP BY p.id
+             ORDER BY p.created_at DESC`,
+            [turno.cajero_id, turno.abierto_at]
+        );
+
+        // Calcular resumen
+        const resumenResult = await db.query(
+            `SELECT
+                COUNT(*) as total_ordenes,
+                SUM(CASE WHEN payment_method != 'no_pago' THEN 1 ELSE 0 END) as ordenes_pagadas,
+                SUM(CASE WHEN payment_method = 'efectivo' THEN total ELSE 0 END) as total_efectivo,
+                SUM(CASE WHEN payment_method = 'tarjeta' THEN total ELSE 0 END) as total_tarjeta,
+                SUM(CASE WHEN order_origin = 'llamada' THEN 1 ELSE 0 END) as ordenes_llamada,
+                SUM(CASE WHEN order_origin = 'presencial' THEN 1 ELSE 0 END) as ordenes_presencial,
+                SUM(CASE WHEN order_origin = 'web' THEN 1 ELSE 0 END) as ordenes_web
+             FROM pedidos
+             WHERE cajero_id = $1 AND DATE(created_at) = DATE($2)`,
+            [turno.cajero_id, turno.abierto_at]
+        );
+
+        res.json({
+            turno,
+            ordenes: ordenesResult.rows,
+            resumen: resumenResult.rows[0]
+        });
+    } catch (e) {
+        console.error('Error:', e);
+        res.status(500).json({ error: 'Error al obtener reporte' });
+    }
+});
+
+// ============================================================
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`🚀 SERVIDOR EN PUERTO ${PORT}`));

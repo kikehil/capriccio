@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
-    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform' | 'dashboard' | 'notifications';
+    activeTab: 'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'caja' | 'platform' | 'dashboard' | 'notifications';
     setActiveTab: (tab: any) => void;
     plan?: string;
 }
@@ -18,6 +18,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
         { id: 'dashboard', label: 'Dashboard', icon: BarChart3, capriccio_only: true },
         { id: 'stats', label: 'Pedidos', icon: LayoutDashboard },
         { id: 'corte', label: 'Corte de Caja', icon: DollarSign },
+        { id: 'caja', label: 'POS (Caja)', icon: TrendingUp },
         { id: 'products', label: 'Productos', icon: Package },
         { id: 'users', label: 'Usuarios', icon: Users },
         { id: 'reports', label: 'Reportes', icon: FileText },
@@ -42,17 +43,17 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab, setActiv
         // 2b. Usuario capriccio tiene acceso completo a todo (sin importar el plan)
         if (username === 'capriccio') return true;
 
-        // 3. ROL CAJA — solo ve Pedidos
-        if (userRole === 'caja') return item.id === 'stats';
+        // 3. ROL CAJA — solo ve Pedidos y puede acceder a POS
+        if (userRole === 'caja') return ['stats', 'caja'].includes(item.id);
 
-        // 4. ROL RESPONSABLE — solo ve Pedidos
-        if (userRole === 'responsable') return item.id === 'stats';
+        // 4. ROL RESPONSABLE — solo ve Pedidos y acceso a POS para supervisión
+        if (userRole === 'responsable') return ['stats', 'caja'].includes(item.id);
 
         // 5. ROL MARKETING — Productos, Promociones y Notificaciones
         if (userRole === 'marketing') return ['products', 'promos', 'notifications'].includes(item.id);
 
         // 6. ADMIN NORMAL — filtro por plan
-        if (plan === 'basico') return ['stats', 'products', 'promos', 'notifications'].includes(item.id);
+        if (plan === 'basico') return ['stats', 'products', 'promos', 'notifications', 'caja'].includes(item.id);
 
         return true;
     });

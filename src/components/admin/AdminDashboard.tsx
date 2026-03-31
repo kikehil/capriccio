@@ -18,6 +18,7 @@ import Login from './Login';
 import { pizzas as initialPizzas, Pizza } from '@/data/menu';
 import BasicOrdersList from './BasicOrdersList';
 import PushManager from './PushManager';
+import POSManager from './POSManager';
 
 import { getSocket, API_URL } from '@/lib/socket';
 
@@ -29,7 +30,7 @@ const AdminDashboard = () => {
         if (role === 'platform') return 'platform';
         return 'stats';
     };
-    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'platform' | 'dashboard' | 'notifications'>(getInitialTab());
+    const [activeTab, setActiveTab] = React.useState<'stats' | 'products' | 'promos' | 'settings' | 'reports' | 'users' | 'corte' | 'caja' | 'platform' | 'dashboard' | 'notifications'>(getInitialTab());
     const [plan, setPlan] = React.useState<string>('basico');
     const [userRole, setUserRole] = React.useState<string>('admin');
     const [isAuth, setIsAuth] = React.useState(false);
@@ -253,6 +254,9 @@ const AdminDashboard = () => {
         }
         if (activeTab === 'corte') {
             return <SettlementManager />;
+        }
+        if (activeTab === 'caja') {
+            return <POSManager />;
         }
         if (activeTab === 'platform') {
             return <PlatformDashboard />;
