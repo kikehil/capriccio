@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Clock, AlertCircle, RefreshCcw, ChefHat } from 'lucide-react';
+import { Check, Clock, AlertCircle, RefreshCcw, ChefHat, Bike, Store, ShoppingBag } from 'lucide-react';
 import { CartItem } from '@/data/cart';
 import { getSocket, API_URL } from '@/lib/socket';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,8 @@ interface KitchenOrder {
     status: 'pending' | 'preparing' | 'ready';
     total: number;
     order_id: string;
+    metodo_entrega?: string;
+    direccion?: string;
 }
 
 const KitchenDisplay = () => {
@@ -293,33 +295,101 @@ const KitchenDisplay = () => {
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                <AnimatePresence mode="popLayout">
-                    {orders.map((order) => (
-                        <OrderCard
-                            key={order.id}
-                            order={order}
-                            onComplete={completeOrder}
-                            onCompleteInStore={completeInStore}
-                            onStartPreparation={startPreparation}
-                        />
-                    ))}
-                </AnimatePresence>
-
-                {isLoaded && orders.length === 0 && (
-                    <div className="col-span-full py-32 flex flex-col items-center justify-center text-slate-700 bg-slate-900/50 border-2 border-dashed border-slate-800 rounded-[3rem]">
-                        <AlertCircle className="w-16 h-16 mb-4 opacity-20" />
-                        <p className="text-2xl font-black italic uppercase tracking-tighter opacity-30">No hay pedidos pendientes</p>
+            {!isLoaded && orders.length === 0 ? (
+                <div className="py-32 flex flex-col items-center justify-center text-capriccio-gold">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-capriccio-gold mb-4"></div>
+                    <p className="font-bold uppercase tracking-widest">Sincronizando pedidos...</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* ── COLUMNA 1: A DOMICILIO ─────────────────────────────────── */}
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-blue-900/40 border border-blue-700/40">
+                            <Bike className="text-blue-400" size={22} />
+                            <h2 className="text-sm font-black uppercase italic tracking-widest text-blue-300 flex-1">Entrega a Domicilio</h2>
+                            <span className="text-lg font-black italic text-blue-400">
+                                {orders.filter(o => o.metodo_entrega === 'domicilio' || (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal')).length}
+                            </span>
+                        </div>
+                        <AnimatePresence mode="popLayout">
+                            {orders
+                                .filter(o => o.metodo_entrega === 'domicilio' || (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal'))
+                                .map(order => (
+                                    <OrderCard
+                                        key={order.id}
+                                        order={order}
+                                        onComplete={completeOrder}
+                                        onCompleteInStore={completeInStore}
+                                        onStartPreparation={startPreparation}
+                                    />
+                                ))}
+                        </AnimatePresence>
+                        {isLoaded && orders.filter(o => o.metodo_entrega === 'domicilio' || (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal')).length === 0 && (
+                            <div className="py-16 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-[2rem]">
+                                <p className="text-xs font-black italic uppercase tracking-widest text-slate-700 opacity-50">Sin pedidos</p>
+                            </div>
+                        )}
                     </div>
-                )}
 
-                {!isLoaded && orders.length === 0 && (
-                    <div className="col-span-full py-32 flex flex-col items-center justify-center text-capriccio-gold">
-                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-capriccio-gold mb-4"></div>
-                        <p className="font-bold uppercase tracking-widest">Sincronizando pedidos...</p>
+                    {/* ── COLUMNA 2: PARA LLEVAR ─────────────────────────────────── */}
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-green-900/40 border border-green-700/40">
+                            <ShoppingBag className="text-green-400" size={22} />
+                            <h2 className="text-sm font-black uppercase italic tracking-widest text-green-300 flex-1">Para Llevar</h2>
+                            <span className="text-lg font-black italic text-green-400">
+                                {orders.filter(o => o.metodo_entrega === 'para_llevar').length}
+                            </span>
+                        </div>
+                        <AnimatePresence mode="popLayout">
+                            {orders
+                                .filter(o => o.metodo_entrega === 'para_llevar')
+                                .map(order => (
+                                    <OrderCard
+                                        key={order.id}
+                                        order={order}
+                                        onComplete={completeOrder}
+                                        onCompleteInStore={completeInStore}
+                                        onStartPreparation={startPreparation}
+                                    />
+                                ))}
+                        </AnimatePresence>
+                        {isLoaded && orders.filter(o => o.metodo_entrega === 'para_llevar').length === 0 && (
+                            <div className="py-16 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-[2rem]">
+                                <p className="text-xs font-black italic uppercase tracking-widest text-slate-700 opacity-50">Sin pedidos</p>
+                            </div>
+                        )}
                     </div>
-                )}
-            </div>
+
+                    {/* ── COLUMNA 3: CONSUMO EN SUCURSAL ────────────────────────── */}
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-900/40 border border-amber-700/40">
+                            <Store className="text-amber-400" size={22} />
+                            <h2 className="text-sm font-black uppercase italic tracking-widest text-amber-300 flex-1">Consumo en Sucursal</h2>
+                            <span className="text-lg font-black italic text-amber-400">
+                                {orders.filter(o => o.metodo_entrega === 'sucursal' || o.direccion === 'Recoger en sucursal').length}
+                            </span>
+                        </div>
+                        <AnimatePresence mode="popLayout">
+                            {orders
+                                .filter(o => o.metodo_entrega === 'sucursal' || o.direccion === 'Recoger en sucursal')
+                                .map(order => (
+                                    <OrderCard
+                                        key={order.id}
+                                        order={order}
+                                        onComplete={completeOrder}
+                                        onCompleteInStore={completeInStore}
+                                        onStartPreparation={startPreparation}
+                                    />
+                                ))}
+                        </AnimatePresence>
+                        {isLoaded && orders.filter(o => o.metodo_entrega === 'sucursal' || o.direccion === 'Recoger en sucursal').length === 0 && (
+                            <div className="py-16 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-[2rem]">
+                                <p className="text-xs font-black italic uppercase tracking-widest text-slate-700 opacity-50">Sin pedidos</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
