@@ -12,9 +12,10 @@ interface StepProps {
   updateFormData: (data: any) => void;
   turno: CajaTurno;
   onReset: () => void;
+  onPrev: () => void;
 }
 
-const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => {
+const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset, onPrev }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -316,14 +317,23 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
       </div>
       </div>
 
-      {/* BUTTON */}
-      <button
-        onClick={handleConfirm}
-        disabled={loading}
-        className="w-full mt-8 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-4 rounded-lg transition text-lg flex items-center justify-center gap-2"
-      >
-        {loading ? 'Procesando...' : '✅ Confirmar y Enviar a Cocina'}
-      </button>
+      {/* BUTTONS */}
+      <div className="mt-8 flex gap-3">
+        <button
+          onClick={onPrev}
+          disabled={loading}
+          className="flex items-center gap-2 px-6 py-4 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 text-gray-800 font-bold rounded-lg transition text-base"
+        >
+          ← Regresar
+        </button>
+        <button
+          onClick={handleConfirm}
+          disabled={loading}
+          className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-4 rounded-lg transition text-lg flex items-center justify-center gap-2"
+        >
+          {loading ? 'Procesando...' : '✅ Confirmar y Enviar a Cocina'}
+        </button>
+      </div>
     </div>
   );
 };

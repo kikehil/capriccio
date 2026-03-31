@@ -32,6 +32,16 @@ export default function CajaPage() {
         },
       });
 
+      // Token expirado o inválido → forzar re-login
+      if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem('capriccio_token_caja');
+        localStorage.removeItem('capriccio_user_role');
+        localStorage.removeItem('capriccio_username');
+        setIsAuthenticated(false);
+        setLoading(false);
+        return;
+      }
+
       if (response.ok) {
         const data = await response.json();
         setTurno(data);
