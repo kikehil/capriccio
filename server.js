@@ -1419,7 +1419,11 @@ app.get('/api/caja/turno/activo', authorize(['admin', 'caja', 'responsable']), a
 
     try {
         const result = await db.query(
-            `SELECT * FROM caja_turno
+            `SELECT *,
+                CAST((julianday('now') - julianday(abierto_at)) * 86400 AS INTEGER) AS duracion_segundos,
+                strftime('%H:%M:%S', abierto_at) AS hora_apertura_utc,
+                strftime('%Y-%m-%d', abierto_at) AS fecha_apertura_utc
+             FROM caja_turno
              WHERE cajero_id = $1 AND cerrado_at IS NULL AND negocio_id = $2
              ORDER BY abierto_at DESC LIMIT 1`,
             [req.user.id, negocio_id]
@@ -1640,7 +1644,10 @@ app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'caja', 'respon
 
     try {
         const turnoResult = await db.query(
-            'SELECT * FROM caja_turno WHERE id = $1',
+            `SELECT *,
+                CAST((julianday('now') - julianday(abierto_at)) * 86400 AS INTEGER) AS duracion_segundos,
+                strftime('%H:%M:%S', abierto_at) AS hora_apertura_utc
+             FROM caja_turno WHERE id = $1`,
             [turno_id]
         );
 
