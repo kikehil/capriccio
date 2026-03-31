@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, AlertCircle } from 'lucide-react';
 import { CajaTurno } from '@/data/caja-types';
 import { API_URL } from '@/lib/socket';
@@ -16,6 +16,30 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({ turno, onClose }) =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  // Estadísticas de ventas del turno
+  const [totalEfectivoVentas, setTotalEfectivoVentas] = useState<number>(0);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/caja/reporte/turno/${turno.id}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('capriccio_token_caja')}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setTotalEfectivoVentas(data.resumen?.total_efectivo || 0);
+        }
+      } catch (err) {
+        console.error('Error cargando stats del turno:', err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    fetchStats();
+  }, [turno.id]);
 
   const handleCloseTurno = async () => {
     if (!efectivoReportado) {
@@ -100,7 +124,11 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({ turno, onClose }) =
             <div>
               <p className="text-gray-600">Hora de Apertura</p>
               <p className="font-semibold text-gray-800">
-                {new Date(turno.abierto_at).toLocaleTimeString('es-CL')}
+                {(() => {
+                  const raw = turno.abierto_at || '';
+                  const iso = raw.includes('T') ? raw : raw.replace(' ', 'T');
+                  return new Date(iso.endsWith('Z') ? iso : iso + 'Z').toLocaleTimeString('es-CL');
+                })()}
               </p>
             </div>
             <div>
@@ -143,29 +171,47 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({ turno, onClose }) =
             {/* CÁLCULO DE DIFERENCIA */}
             {efectivoReportado && (
               <div className="bg-white p-4 rounded border-2 border-blue-300">
-                <p className="text-sm text-gray-600 mb-3">Resumen:</p>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Efectivo Inicial:</span>
-                    <span className="font-semibold">${turno.efectivo_inicial.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>+ Efectivo Reportado:</span>
-                    <span>${parseFloat(efectivoReportado || '0').toLocaleString()}</span>
-                  </div>
-                  <div className={`border-t-2 pt-2 flex justify-between font-bold text-lg ${
-                    (parseFloat(efectivoReportado) - turno.efectivo_inicial) > 0
-                      ? 'text-green-600'
-                      : (parseFloat(efectivoReportado) - turno.efectivo_inicial) < 0
-                      ? 'text-red-600'
-                      : 'text-gray-800'
-                  }`}>
-                    <span>Diferencia:</span>
-                    <span>
-                      ${(parseFloat(efectivoReportado || '0') - turno.efectivo_inicial).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
+                {loadingStats ? (
+                  <p className="text-sm text-gray-500 text-center py-2">Calculando...</p>
+                ) : (() => {
+                  const contado = parseFloat(efectivoReportado || '0');
+                  const esperado = turno.efectivo_inicial + totalEfectivoVentas;
+                  const diferencia = contado - esperado;
+                  return (
+                    <div className="space-y-2 text-sm">
+                      <p className="font-bold text-gray-700 mb-3">Resumen del turno:</p>
+                      <div className="flex justify-between text-gray-600">
+                        <span>Efectivo Inicial:</span>
+                        <span className="font-semibold">${turno.efectivo_inicial.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600">
+                        <span>+ Ventas en Efectivo:</span>
+                        <span className="font-semibold text-green-700">+${totalEfectivoVentas.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-gray-800 border-t pt-2">
+                        <span>= Esperado en Caja:</span>
+                        <span>${esperado.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600">
+                        <span>Efectivo Contado:</span>
+                        <span className="font-semibold">${contado.toLocaleString()}</span>
+                      </div>
+                      <div className={`border-t-2 pt-2 flex justify-between font-bold text-lg ${
+                        diferencia > 0 ? 'text-green-600' : diferencia < 0 ? 'text-red-600' : 'text-gray-800'
+                      }`}>
+                        <span>Diferencia:</span>
+                        <span>{diferencia >= 0 ? '+' : ''}{diferencia.toLocaleString()}</span>
+                      </div>
+                      {diferencia !== 0 && (
+                        <p className="text-xs text-gray-500 italic">
+                          {diferencia > 0
+                            ? '↑ Sobrante en caja'
+                            : '↓ Faltante en caja'}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

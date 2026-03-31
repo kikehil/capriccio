@@ -122,18 +122,27 @@ const CashRegisterPanel: React.FC<CashRegisterPanelProps> = ({ turno }) => {
           <div>
             <p className="text-gray-600 text-sm">Hora de Apertura</p>
             <p className="font-bold text-lg text-gray-800">
-              {new Date(turno.abierto_at).toLocaleTimeString('es-CL')}
+              {(() => {
+                const raw = turno.abierto_at || '';
+                const iso = raw.includes('T') ? raw : raw.replace(' ', 'T');
+                return new Date(iso.endsWith('Z') ? iso : iso + 'Z').toLocaleTimeString('es-CL');
+              })()}
             </p>
           </div>
           <div>
             <p className="text-gray-600 text-sm">Duración del Turno</p>
             <p className="font-bold text-lg text-gray-800">
               {(() => {
-                const now = new Date();
-                const opening = new Date(turno.abierto_at);
-                const diff = Math.floor((now.getTime() - opening.getTime()) / 1000 / 60);
-                const hours = Math.floor(diff / 60);
-                const mins = diff % 60;
+                // El VPS almacena en UTC (usa datetime('now','localtime') con VPS en UTC)
+                // Forzamos parseo como UTC para evitar doble conversión de zona horaria
+                const raw = turno.abierto_at || '';
+                const iso = raw.includes('T') ? raw : raw.replace(' ', 'T');
+                const opening = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+                const diffMs = Date.now() - opening.getTime();
+                if (diffMs < 0) return '0h 0m';
+                const totalMins = Math.floor(diffMs / 60000);
+                const hours = Math.floor(totalMins / 60);
+                const mins = totalMins % 60;
                 return `${hours}h ${mins}m`;
               })()}
             </p>
