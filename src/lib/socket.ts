@@ -5,7 +5,7 @@ const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ||
     (typeof window !== 'undefined'
         ? (
-            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000' || window.location.port === '3080')
+            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000')
                 ? `${window.location.protocol}//${window.location.hostname}:3001`
                 : `${window.location.protocol}//${window.location.hostname}:3081`
         )
@@ -21,7 +21,7 @@ const getSocketUrl = () => {
         if (process.env.NEXT_PUBLIC_SOCKET_URL) return process.env.NEXT_PUBLIC_SOCKET_URL;
 
         // Caso localhost o desarrollo
-        if (host === 'localhost' || host === '127.0.0.1' || port === '3000' || port === '3080') {
+        if (host === 'localhost' || host === '127.0.0.1' || port === '3000') {
             return `${protocol}//${host}:3001`;
         }
         // Caso IP del VPS
