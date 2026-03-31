@@ -161,47 +161,46 @@ const PaymentStep: React.FC<StepProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Monto Recibido ($)
               </label>
-              <input
-                type="text"
-                inputMode="none"
-                value={montoRecibido}
-                onChange={(e) => handleMontoChange(e.target.value)}
-                onFocus={() => setShowKeypad(true)}
-                className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none text-gray-900 bg-white cursor-pointer"
-                placeholder="0"
-                readOnly
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={montoRecibido}
+                  onChange={(e) => handleMontoChange(e.target.value)}
+                  onFocus={() => setShowKeypad(true)}
+                  className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none text-gray-900 bg-white"
+                  placeholder="0"
+                />
+                {/* Floating keypad */}
+                {showKeypad && (
+                  <div className="absolute left-0 top-full mt-1 z-50">
+                    <NumericKeypad
+                      value={montoRecibido}
+                      onChange={(val) => handleMontoChange(val)}
+                      onAccept={() => setShowKeypad(false)}
+                      onClose={() => setShowKeypad(false)}
+                      showDot={false}
+                    />
+                  </div>
+                )}
+              </div>
 
               {/* RESUMEN */}
               <div className="mt-4 space-y-2">
-                <div className="flex justify-between text-gray-700">
-                  <span>Total:</span>
-                  <span className="font-bold">${formData.total.toLocaleString()}</span>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Total:</span>
+                  <span className="font-bold text-gray-900">${formData.total.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>Monto Recibido:</span>
-                  <span className="font-bold">${parseFloat(montoRecibido || '0').toLocaleString()}</span>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Monto Recibido:</span>
+                  <span className="font-bold text-gray-900">${parseFloat(montoRecibido || '0').toLocaleString()}</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
-                  <span className="font-bold text-lg">Cambio:</span>
-                  <span className={`font-bold text-lg ${cambio > 0 ? 'text-green-600' : ''}`}>
+                  <span className="font-bold text-lg text-gray-900">Cambio:</span>
+                  <span className={`font-bold text-lg ${cambio > 0 ? 'text-green-600' : 'text-gray-900'}`}>
                     ${cambio.toLocaleString()}
                   </span>
                 </div>
               </div>
-
-              {/* TECLADO NUMÉRICO TÁCTIL */}
-              {showKeypad && (
-                <div className="mt-6 pt-6 border-t border-gray-300">
-                  <p className="text-sm text-gray-600 mb-3 font-semibold">Ingresa el monto recibido:</p>
-                  <NumericKeypad
-                    value={montoRecibido}
-                    onChange={setMontoRecibido}
-                    onClose={() => setShowKeypad(false)}
-                    showDot={false}
-                  />
-                </div>
-              )}
             </div>
           )}
 

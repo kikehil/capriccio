@@ -1499,7 +1499,7 @@ app.post('/api/caja/pedidos', authorize(['admin', 'caja', 'responsable']), async
                 order_id, cliente_nombre, telefono, direccion, referencias || null, total,
                 'recibido', negocio_id, telefono || null, metodo_entrega,
                 order_origin, req.user.id, req.user.username, payment_method,
-                monto_recibido || null, payment_method !== 'no_pago' ? 'NOW()' : null
+                monto_recibido || null, payment_method !== 'no_pago' ? new Date().toISOString() : null
             ]
         );
 
@@ -1550,7 +1550,27 @@ app.post('/api/caja/pedidos', authorize(['admin', 'caja', 'responsable']), async
             });
         }
 
-        // Emitir evento Socket para Kitchen Display
+        // Emitir evento Socket para Kitchen Display (mismo evento que pedidos web)
+        io.emit('nuevo_pedido', {
+            cliente_nombre,
+            telefono,
+            direccion,
+            order_id,
+            total,
+            status: 'recibido',
+            metodo_entrega,
+            order_origin,
+            items: items.map(i => ({
+                nombre: i.pizza_nombre,
+                quantity: i.cantidad,
+                totalItemPrice: i.precio_unitario,
+                size: i.size || null,
+                crust: i.crust || null,
+                extras: i.extras || []
+            })),
+            created_at: new Date().toISOString()
+        });
+        // También emitir evento específico de caja para otros módulos
         io.emit('nuevo_pedido_caja', {
             pedido: pedidoResult.rows[0],
             origin: order_origin,

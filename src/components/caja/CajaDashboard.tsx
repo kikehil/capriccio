@@ -33,11 +33,19 @@ const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, on
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Obtener hora actual en formato HH:MM
-  const getCurrentTime = () => {
+  const [currentTime, setCurrentTime] = useState(() => {
     const now = new Date();
-    return now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-  };
+    return now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
+  });
+
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true }));
+    };
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleOpenShift = async (efectivo_inicial: number) => {
     setLoading(true);
@@ -112,46 +120,46 @@ const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, on
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* HEADER */}
-      <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <img src="/logohd.png" alt="Capriccio" className="h-12 w-auto" />
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">POS Capriccio</h1>
-              <p className="text-sm text-gray-600">
-                Cajero: <span className="font-semibold">{turno.cajero_nombre}</span> •
-                Hora: <span className="font-mono text-red-600 ml-2">{getCurrentTime()}</span>
-              </p>
-            </div>
+      {/* HEADER — single bar: tabs left + info right */}
+      <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 flex items-stretch">
+        {/* NAV TABS */}
+        <div className="flex items-stretch overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex flex-col items-center justify-center gap-1 px-6 py-3 font-bold text-sm transition whitespace-nowrap border-r border-gray-200 ${
+                activeTab === tab.id
+                  ? 'bg-red-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* SPACER */}
+        <div className="flex-1" />
+
+        {/* BRAND + INFO + LOGOUT */}
+        <div className="flex items-center gap-3 px-4 border-l border-gray-200">
+          <img src="/logohd.png" alt="Capriccio" className="h-8 w-auto" />
+          <div>
+            <p className="text-base font-bold text-gray-800 leading-tight">POS Capriccio</p>
+            <p className="text-xs text-gray-500 leading-tight">
+              Cajero: <span className="font-semibold text-gray-700">{turno.cajero_nombre}</span>
+              {' • '}Hora: <span className="font-mono text-red-600">{currentTime}</span>
+            </p>
           </div>
           <button
             onClick={onLogout}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            className="flex items-center gap-1 ml-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition text-sm"
           >
-            <LogOut size={20} />
+            <LogOut size={18} />
             Salir
           </button>
-        </div>
-
-        {/* TAB NAVIGATION */}
-        <div className="border-t border-gray-200 overflow-x-auto">
-          <div className="flex gap-2 px-4 py-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center gap-1 px-6 py-4 font-bold text-lg transition whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                {tab.icon}
-                <span className="text-xs md:text-sm">{tab.label}</span>
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 

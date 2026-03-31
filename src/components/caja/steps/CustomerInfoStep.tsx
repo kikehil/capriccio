@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { CajaTurno } from '@/data/caja-types';
 import NumericKeypad from '@/components/ui/NumericKeypad';
 
@@ -21,37 +21,25 @@ const CustomerInfoStep: React.FC<StepProps> = ({
 }) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPhoneKeypad, setShowPhoneKeypad] = useState(false);
+  const phoneRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (field: string, value: string) => {
     updateFormData({ [field]: value });
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
+    if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }));
   };
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-
-    if (!formData.cliente_nombre?.trim()) {
-      newErrors.cliente_nombre = 'El nombre es requerido';
-    }
-    if (!formData.telefono?.trim()) {
-      newErrors.telefono = 'El teléfono es requerido';
-    }
-
-    // Validar dirección si es domicilio
-    if (formData.metodo_entrega === 'domicilio' && !formData.direccion?.trim()) {
+    if (!formData.cliente_nombre?.trim()) newErrors.cliente_nombre = 'El nombre es requerido';
+    if (!formData.telefono?.trim()) newErrors.telefono = 'El teléfono es requerido';
+    if (formData.metodo_entrega === 'domicilio' && !formData.direccion?.trim())
       newErrors.direccion = 'La dirección es requerida para domicilio';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleNext = () => {
-    if (validate()) {
-      onNext();
-    }
+    if (validate()) onNext();
   };
 
   const isDomicilio = formData.metodo_entrega === 'domicilio';
@@ -83,35 +71,34 @@ const CustomerInfoStep: React.FC<StepProps> = ({
         </div>
 
         {/* TELÉFONO */}
-        <div>
+        <div className="relative">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Teléfono *
           </label>
           <input
+            ref={phoneRef}
             type="text"
-            inputMode="none"
             value={formData.telefono}
             onChange={(e) => handleChange('telefono', e.target.value)}
             onFocus={() => setShowPhoneKeypad(true)}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition text-gray-900 bg-white cursor-pointer ${
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition text-gray-900 bg-white ${
               errors.telefono ? 'border-red-500' : 'border-gray-300'
             }`}
-            placeholder="Ej: +56912345678"
-            readOnly
+            placeholder="Toca o escribe el teléfono"
           />
           {errors.telefono && (
             <p className="text-red-600 text-sm mt-1">{errors.telefono}</p>
           )}
 
-          {/* TECLADO NUMÉRICO PARA TELÉFONO */}
+          {/* Floating keypad */}
           {showPhoneKeypad && (
-            <div className="mt-4 pt-4 border-t border-gray-300">
-              <p className="text-sm text-gray-600 mb-3 font-semibold">Ingresa el teléfono:</p>
+            <div className="absolute left-0 top-full mt-1 z-50 shadow-2xl">
               <NumericKeypad
                 value={formData.telefono}
                 onChange={(val) => handleChange('telefono', val)}
+                onAccept={() => setShowPhoneKeypad(false)}
                 onClose={() => setShowPhoneKeypad(false)}
-                showDot={true}
+                showDot={false}
               />
             </div>
           )}
@@ -128,7 +115,7 @@ const CustomerInfoStep: React.FC<StepProps> = ({
                 type="text"
                 value={formData.direccion || ''}
                 onChange={(e) => handleChange('direccion', e.target.value)}
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition ${
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition text-gray-900 bg-white ${
                   errors.direccion ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Ej: Calle Principal 123, Depto 4B"
@@ -138,7 +125,6 @@ const CustomerInfoStep: React.FC<StepProps> = ({
               )}
             </div>
 
-            {/* REFERENCIAS */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Referencias (Opcional)

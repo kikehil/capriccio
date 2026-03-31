@@ -238,16 +238,16 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
           <div className="space-y-2 text-sm">
             <p>
               <span className="text-gray-600">Nombre:</span>{' '}
-              <span className="font-semibold">{formData.cliente_nombre}</span>
+              <span className="font-semibold text-gray-900">{formData.cliente_nombre}</span>
             </p>
             <p>
               <span className="text-gray-600">Teléfono:</span>{' '}
-              <span className="font-semibold">{formData.telefono}</span>
+              <span className="font-semibold text-gray-900">{formData.telefono}</span>
             </p>
             {formData.direccion && (
               <p>
                 <span className="text-gray-600">Dirección:</span>{' '}
-                <span className="font-semibold">{formData.direccion}</span>
+                <span className="font-semibold text-gray-900">{formData.direccion}</span>
               </p>
             )}
           </div>
@@ -259,11 +259,11 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
           <div className="space-y-2 text-sm">
             <p>
               <span className="text-gray-600">Origen:</span>{' '}
-              <span className="font-semibold capitalize">{formData.order_origin}</span>
+              <span className="font-semibold text-gray-900 capitalize">{formData.order_origin}</span>
             </p>
             <p>
               <span className="text-gray-600">Entrega:</span>{' '}
-              <span className="font-semibold capitalize">{formData.metodo_entrega}</span>
+              <span className="font-semibold text-gray-900 capitalize">{formData.metodo_entrega}</span>
             </p>
           </div>
         </div>
@@ -273,7 +273,7 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
           <h3 className="font-bold text-gray-800 mb-3">Items ({formData.items.length})</h3>
           <div className="space-y-2 text-sm">
             {formData.items.map((item: any) => (
-              <div key={item.pizza_nombre} className="flex justify-between">
+              <div key={item.pizza_nombre} className="flex justify-between text-gray-900">
                 <span>
                   {item.cantidad}x {item.pizza_nombre}
                 </span>
@@ -295,13 +295,13 @@ const ConfirmationStep: React.FC<StepProps> = ({ formData, turno, onReset }) => 
               <>
                 <p>
                   <span className="text-gray-600">Método:</span>{' '}
-                  <span className="font-semibold capitalize">{formData.payment_method}</span>
+                  <span className="font-semibold text-gray-900 capitalize">{formData.payment_method}</span>
                 </p>
                 {formData.payment_method === 'efectivo' && (
                   <>
                     <p>
                       <span className="text-gray-600">Recibido:</span>{' '}
-                      <span className="font-semibold">${formData.monto_recibido?.toLocaleString()}</span>
+                      <span className="font-semibold text-gray-900">${formData.monto_recibido?.toLocaleString()}</span>
                     </p>
                     <p>
                       <span className="text-gray-600">Cambio:</span>{' '}
