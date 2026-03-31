@@ -1440,7 +1440,7 @@ app.patch('/api/caja/turno/:id/cerrar', authorize(['admin', 'caja', 'responsable
         // Actualizar turno
         const updateResult = await db.query(
             `UPDATE caja_turno
-             SET cerrado_at = NOW(), efectivo_recibido = $1, efectivo_reportado = $2, diferencia = $3
+             SET cerrado_at = CURRENT_TIMESTAMP, efectivo_recibido = $1, efectivo_reportado = $2, diferencia = $3
              WHERE id = $4
              RETURNING *`,
             [efectivo_recibido, efectivo_reportado || 0, diferencia, id]
