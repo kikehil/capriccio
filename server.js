@@ -132,13 +132,16 @@ app.post('/api/auth/login', async (req, res) => {
         console.log('[LOGIN] Password vÁlida:', validPass);
 
         if (validPass) {
+            // Roles que permanecen en pantalla de forma continua reciben tokens de larga duración
+            const longLivedRoles = ['cocina', 'repartidor', 'caja'];
+            const tokenExpiry = longLivedRoles.includes(user.role) ? '365d' : '7d';
             const token = jwt.sign({
                 id: user.id,
                 username: user.username,
                 role: user.role,
                 negocio_id: user.negocio_id,
                 plan: user.plan || 'basico'
-            }, JWT_SECRET, { expiresIn: '7d' });
+            }, JWT_SECRET, { expiresIn: tokenExpiry });
 
             return res.json({
                 token,
@@ -154,6 +157,27 @@ app.post('/api/auth/login', async (req, res) => {
         console.error('[LOGIN] Error:', err);
         res.status(500).json({ error: 'Error del servidor' });
     }
+});
+
+// POST /api/auth/refresh — Renueva un token válido (sin necesidad de contraseña)
+// Útil para pantallas que permanecen abiertas indefinidamente (cocina, repartidor)
+app.post('/api/auth/refresh', (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Token requerido' });
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ error: 'Token inválido o expirado' });
+        const longLivedRoles = ['cocina', 'repartidor', 'caja'];
+        const tokenExpiry = longLivedRoles.includes(user.role) ? '365d' : '7d';
+        const newToken = jwt.sign({
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            negocio_id: user.negocio_id,
+            plan: user.plan || 'basico'
+        }, JWT_SECRET, { expiresIn: tokenExpiry });
+        res.json({ token: newToken });
+    });
 });
 
 // --- API USUARIOS ---
