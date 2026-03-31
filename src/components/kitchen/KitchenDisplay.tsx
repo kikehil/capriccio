@@ -20,12 +20,34 @@ interface KitchenOrder {
     direccion?: string;
 }
 
+// Intenta renovar el token silenciosamente; devuelve true si tuvo éxito
+const refreshToken = async (): Promise<boolean> => {
+    try {
+        const token = localStorage.getItem('capriccio_token_cocina');
+        if (!token) return false;
+        const resp = await fetch(`${API_URL}/api/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            localStorage.setItem('capriccio_token_cocina', data.token);
+            console.log('🔄 [Cocina] Token renovado automáticamente');
+            return true;
+        }
+        return false;
+    } catch {
+        return false;
+    }
+};
+
 const KitchenDisplay = () => {
     const [orders, setOrders] = useState<KitchenOrder[]>([]);
     const [repartidoresOnline, setRepartidoresOnline] = useState<any[]>([]);
     const [currentTime, setCurrentTime] = useState<string>('');
     const [isLoaded, setIsLoaded] = useState(false);
     const [lastSync, setLastSync] = useState<Date>(new Date());
+    const [sessionExpired, setSessionExpired] = useState(false);
 
     const fetchOrders = async () => {
         setIsLoaded(false);
@@ -63,7 +85,7 @@ const KitchenDisplay = () => {
         }
     };
 
-    // 1. Carga inicial de pedidos y Reloj
+    // 1. Carga inicial de pedidos, Reloj y renovación automática de token cada 12h
     useEffect(() => {
         fetchOrders();
 
@@ -73,7 +95,16 @@ const KitchenDisplay = () => {
         updateTime();
         const timer = setInterval(updateTime, 10000);
 
-        return () => clearInterval(timer);
+        // Renovar token cada 12 horas para que nunca expire en cocina
+        const tokenRefreshInterval = setInterval(async () => {
+            console.log('🔑 [Cocina] Renovación periódica de token...');
+            await refreshToken();
+        }, 12 * 60 * 60 * 1000);
+
+        return () => {
+            clearInterval(timer);
+            clearInterval(tokenRefreshInterval);
+        };
     }, []);
 
     // 2. Conexión Socket para Sincronización en Tiempo Real
@@ -142,20 +173,47 @@ const KitchenDisplay = () => {
         return () => document.removeEventListener('visibilitychange', handleVisibility);
     }, []);
 
+    // Wrapper para PATCH con manejo automático de 401/403: renueva token y reintenta
+    const patchWithAuth = async (url: string, body: object): Promise<boolean> => {
+        const doFetch = async () => {
+            const token = localStorage.getItem('capriccio_token_cocina');
+            return fetch(url, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(body)
+            });
+        };
+        try {
+            let resp = await doFetch();
+            if (resp.status === 401 || resp.status === 403) {
+                console.warn('⚠️ [Cocina] Token expirado, renovando...');
+                const refreshed = await refreshToken();
+                if (refreshed) {
+                    resp = await doFetch(); // reintento con nuevo token
+                } else {
+                    setSessionExpired(true);
+                    return false;
+                }
+            }
+            if (!resp.ok) return false;
+            setSessionExpired(false);
+            return true;
+        } catch (error) {
+            console.error('Error PATCH:', error);
+            return false;
+        }
+    };
+
     const startPreparation = async (id: string) => {
         const order = orders.find(o => o.id === id);
         if (!order) return;
-        try {
-            const token = localStorage.getItem('capriccio_token_cocina');
-            const resp = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ status: 'en_preparacion' })
-            });
-            if (resp.ok) {
-                setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'preparing' } : o));
-            }
-        } catch (error) { console.error('Error:', error); }
+        const ok = await patchWithAuth(
+            `${API_URL}/api/pedidos/${order.order_id || id}/status`,
+            { status: 'en_preparacion' }
+        );
+        if (ok) {
+            setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'preparing' } : o));
+        }
     };
 
     const generateTicketPDF = (order: KitchenOrder) => {
@@ -214,57 +272,49 @@ const KitchenDisplay = () => {
     const completeOrder = async (id: string) => {
         const order = orders.find(o => o.id === id);
         if (!order) return;
-
-        try {
-            const token = localStorage.getItem('capriccio_token_cocina');
-            const resp = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    status: 'listo'
-                })
-            });
-            if (resp.ok) {
-                // Generar e imprimir ticket
-                generateTicketPDF(order);
-                // Remover de la lista
-                setOrders(prev => prev.filter(o => o.id !== id));
-            }
-        } catch (error) {
-            console.error("❌ [Cocina] Error al completar pedido:", error);
+        const ok = await patchWithAuth(
+            `${API_URL}/api/pedidos/${order.order_id || id}/status`,
+            { status: 'listo' }
+        );
+        if (ok) {
+            generateTicketPDF(order);
+            setOrders(prev => prev.filter(o => o.id !== id));
         }
     };
 
     const completeInStore = async (id: string) => {
         const order = orders.find(o => o.id === id);
         if (!order) return;
-
-        try {
-            const token = localStorage.getItem('capriccio_token_cocina');
-            const resp = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    status: 'entregado',
-                    repartidor: 'sucursal'
-                })
-            });
-            if (resp.ok) {
-                setOrders(prev => prev.filter(o => o.id !== id));
-            }
-        } catch (error) {
-            console.error("❌ [Cocina] Error al completar en sucursal:", error);
+        const ok = await patchWithAuth(
+            `${API_URL}/api/pedidos/${order.order_id || id}/status`,
+            { status: 'entregado', repartidor: 'sucursal' }
+        );
+        if (ok) {
+            setOrders(prev => prev.filter(o => o.id !== id));
         }
     };
 
     return (
         <div className="min-h-screen bg-slate-950 p-4 md:p-8">
+            {sessionExpired && (
+                <div className="mb-6 flex items-center gap-4 bg-red-900/70 border border-red-600 text-red-200 px-6 py-4 rounded-2xl">
+                    <AlertCircle className="text-red-400 flex-shrink-0" size={22} />
+                    <p className="font-bold text-sm flex-1">
+                        ⚠️ Sesión expirada — los botones no responden. Renovando sesión...
+                    </p>
+                    <button
+                        onClick={async () => {
+                            const ok = await refreshToken();
+                            if (ok) setSessionExpired(false);
+                            else window.location.reload();
+                        }}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition"
+                    >
+                        Renovar
+                    </button>
+                </div>
+            )}
+
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-slate-800 pb-8">
                 <div className="flex items-center gap-6">
                     <img src="/logohd.png" alt="Logo" className="h-20 w-auto drop-shadow-lg" />
