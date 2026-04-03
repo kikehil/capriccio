@@ -13,7 +13,7 @@ interface UserData {
     referencias: string;
     lat?: number;
     lng?: number;
-    metodo_entrega?: 'domicilio' | 'sucursal';
+    metodo_entrega?: 'domicilio' | 'sucursal' | 'para_llevar';
 }
 
 interface CheckoutModalProps {
@@ -37,7 +37,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
     const [isLocating, setIsLocating] = useState(false);
     const [privacidadAceptada, setPrivacidadAceptada] = useState(false);
     const [clienteLogueado, setClienteLogueado] = useState(false);
-    const [metodoEntrega, setMetodoEntrega] = useState<'domicilio' | 'sucursal'>('domicilio');
+    const [metodoEntrega, setMetodoEntrega] = useState<'domicilio' | 'para_llevar'>('domicilio');
 
     useEffect(() => {
         setClienteLogueado(!!localStorage.getItem('capriccio_cliente_telefono'));
@@ -105,8 +105,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
         const dataToSend = {
             ...userData,
             metodo_entrega: metodoEntrega,
-            // Si es sucursal, limpiar dirección
-            direccion: metodoEntrega === 'sucursal' ? 'Recoger en sucursal' : userData.direccion,
+            // Si para_llevar, limpiar dirección
+            direccion: metodoEntrega === 'para_llevar' ? 'Recoger en sucursal' : userData.direccion,
         };
         localStorage.setItem('pizza_user_data', JSON.stringify(userData));
         onConfirm(dataToSend);
@@ -259,10 +259,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setMetodoEntrega('sucursal')}
+                                            onClick={() => setMetodoEntrega('para_llevar')}
                                             className={cn(
                                                 "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all",
-                                                metodoEntrega === 'sucursal'
+                                                metodoEntrega === 'para_llevar'
                                                     ? "border-capriccio-gold bg-capriccio-gold/10 text-capriccio-gold"
                                                     : "border-white/10 bg-white/5 text-gray-400 hover:border-white/20"
                                             )}
@@ -320,7 +320,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onConfir
                                 </>
                                 )}
 
-                                {metodoEntrega === 'sucursal' && (
+                                {metodoEntrega === 'para_llevar' && (
                                     <div className="bg-capriccio-gold/10 border border-capriccio-gold/20 rounded-2xl p-4 text-center">
                                         <Store size={28} className="mx-auto text-capriccio-gold mb-2" />
                                         <p className="text-white font-black italic text-sm uppercase">Recoge en sucursal</p>

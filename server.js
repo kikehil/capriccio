@@ -1710,6 +1710,89 @@ app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'caja', 'respon
     }
 });
 
+// GET /api/caja/buscar-pedido?q=... — Busca un pedido por número para cobro en caja
+app.get('/api/caja/buscar-pedido', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
+    const { q } = req.query;
+    if (!q || String(q).trim().length < 2) {
+        return res.status(400).json({ error: 'Ingresa al menos 2 caracteres' });
+    }
+    const search = `%${String(q).trim().toUpperCase()}%`;
+    try {
+        const result = await db.query(
+            `SELECT p.*
+             FROM pedidos p
+             WHERE UPPER(p.order_id) LIKE $1
+             ORDER BY p.created_at DESC
+             LIMIT 5`,
+            [search]
+        );
+        // Parsear items (JSON string)
+        const rows = result.rows.map((r) => ({
+            ...r,
+            items: typeof r.items === 'string' ? (() => { try { return JSON.parse(r.items); } catch { return []; } })() : (r.items || []),
+        }));
+        res.json(rows);
+    } catch (e) {
+        console.error('Error buscar-pedido:', e);
+        res.status(500).json({ error: 'Error en búsqueda' });
+    }
+});
+
+// PATCH /api/caja/cobrar-pedido/:order_id — Cobra y liquida un pedido en caja
+app.patch('/api/caja/cobrar-pedido/:order_id', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
+    const { order_id } = req.params;
+    const { payment_method, monto_recibido, turno_id, cajero_nombre } = req.body;
+
+    if (!payment_method) return res.status(400).json({ error: 'Método de pago requerido' });
+
+    try {
+        // Buscar el pedido
+        const pedidoResult = await db.query(
+            'SELECT * FROM pedidos WHERE order_id = $1',
+            [order_id]
+        );
+        if (pedidoResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Pedido no encontrado' });
+        }
+        const pedido = pedidoResult.rows[0];
+
+        // Actualizar pedido: marcar como pagado y liquidado
+        await db.query(
+            `UPDATE pedidos
+             SET payment_method = $1,
+                 monto_recibido = $2,
+                 pagado_at = CURRENT_TIMESTAMP,
+                 liquidado = 1,
+                 liquidado_at = CURRENT_TIMESTAMP,
+                 liquidado_por = $3
+             WHERE order_id = $4`,
+            [payment_method, monto_recibido || pedido.total, cajero_nombre || 'Cajero', order_id]
+        );
+
+        // Registrar en caja_pagos_detalle si hay turno activo
+        if (turno_id) {
+            try {
+                await db.query(
+                    `INSERT INTO caja_pagos_detalle (turno_id, pedido_id, monto, metodo, cajero_nombre)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [turno_id, pedido.id, pedido.total, payment_method, cajero_nombre || 'Cajero']
+                );
+            } catch (e) {
+                console.warn('caja_pagos_detalle insert error:', e.message);
+            }
+        }
+
+        // Notificar via socket
+        io.emit('pedidos_liquidados', { order_ids: [order_id] });
+        io.emit('pedido_status_update', { order_id, liquidado: 1, payment_method });
+
+        res.json({ ok: true, order_id, payment_method, total: pedido.total });
+    } catch (e) {
+        console.error('Error cobrar-pedido:', e);
+        res.status(500).json({ error: 'Error al cobrar pedido' });
+    }
+});
+
 // ============================================================
 
 const PORT = process.env.PORT || 3001;

@@ -29,6 +29,7 @@ interface Order {
     delivered_at?: string;
     repartidor?: string;
     metodo_entrega?: string;
+    order_origin?: string;
     notas?: string;
     items: OrderItem[];
 }
@@ -422,15 +423,18 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
         )
     ));
 
-    const sucursalOrders = sortByOldest(orders.filter(o =>
+    // Para Llevar: POS para_llevar + web sucursal (legacy) + legacy "Recoger en sucursal" address
+    const paraLlevarOrders = sortByOldest(orders.filter(o =>
         !o.liquidado && (
-            o.metodo_entrega === 'sucursal' ||
-            o.direccion === 'Recoger en sucursal'
+            o.metodo_entrega === 'para_llevar' ||
+            (o.metodo_entrega === 'sucursal' && o.order_origin === 'web') ||
+            (!o.metodo_entrega && o.direccion === 'Recoger en sucursal')
         )
     ));
 
-    const paraLlevarOrders = sortByOldest(orders.filter(o =>
-        !o.liquidado && o.metodo_entrega === 'para_llevar'
+    // Consumo en Sucursal: POS sucursal only (caja, not web)
+    const consumoSucursalOrders = sortByOldest(orders.filter(o =>
+        !o.liquidado && o.metodo_entrega === 'sucursal' && o.order_origin !== 'web'
     ));
 
     return (
@@ -477,22 +481,22 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
                         liquidatingId={isLiquidating}
                     />
                     <ColumnSection
-                        title="Para Recoger / En Sucursal"
-                        count={sucursalOrders.length}
-                        icon={<Store size={20} />}
+                        title="Para Llevar"
+                        count={paraLlevarOrders.length}
+                        icon={<ShoppingBag size={20} />}
                         colorClass="bg-amber-50 border-amber-100 text-amber-800"
-                        orders={sucursalOrders}
+                        orders={paraLlevarOrders}
                         expandedOrder={expandedOrder}
                         onToggle={toggleExpand}
                         onLiquidar={handleLiquidar}
                         liquidatingId={isLiquidating}
                     />
                     <ColumnSection
-                        title="Para Llevar"
-                        count={paraLlevarOrders.length}
-                        icon={<ShoppingBag size={20} />}
+                        title="Consumo en Sucursal"
+                        count={consumoSucursalOrders.length}
+                        icon={<Store size={20} />}
                         colorClass="bg-green-50 border-green-100 text-green-800"
-                        orders={paraLlevarOrders}
+                        orders={consumoSucursalOrders}
                         expandedOrder={expandedOrder}
                         onToggle={toggleExpand}
                         onLiquidar={handleLiquidar}

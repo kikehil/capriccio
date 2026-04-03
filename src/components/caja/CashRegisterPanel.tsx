@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp } from 'lucide-react';
+import { DollarSign, TrendingUp, User } from 'lucide-react';
 import { CajaTurno } from '@/data/caja-types';
 import { API_URL } from '@/lib/socket';
 
@@ -10,6 +10,21 @@ interface CashRegisterStats {
   total_efectivo: number;
   total_tarjeta: number;
   total_ingresos: number;
+}
+
+interface OrdenDetalle {
+  id: number;
+  order_id: string;
+  cliente_nombre: string;
+  total: number;
+  payment_method?: string;
+  metodo_entrega?: string;
+  order_origin?: string;
+  cajero_nombre?: string;
+  liquidado_por?: string;
+  liquidado: number;
+  status: string;
+  created_at: string;
 }
 
 interface CashRegisterPanelProps {
@@ -23,6 +38,7 @@ const CashRegisterPanel: React.FC<CashRegisterPanelProps> = ({ turno }) => {
     total_tarjeta: 0,
     total_ingresos: 0,
   });
+  const [ordenes, setOrdenes] = useState<OrdenDetalle[]>([]);
   const [loading, setLoading] = useState(true);
   // Duración calculada por el servidor (segundos), libre de timezone
   const [duracionBase, setDuracionBase] = useState<number>(0);
@@ -60,6 +76,7 @@ const CashRegisterPanel: React.FC<CashRegisterPanelProps> = ({ turno }) => {
           total_tarjeta: resumen.total_tarjeta || 0,
           total_ingresos: (resumen.total_efectivo || 0) + (resumen.total_tarjeta || 0),
         });
+        if (data.ordenes) setOrdenes(data.ordenes);
         // Sincronizar duración desde el servidor (evita drift de timezone)
         if (data.turno?.duracion_segundos != null) {
           setDuracionBase(Number(data.turno.duracion_segundos));
@@ -161,6 +178,96 @@ const CashRegisterPanel: React.FC<CashRegisterPanelProps> = ({ turno }) => {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* DETALLE DE PEDIDOS DEL TURNO */}
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-xl font-bold text-gray-800">Detalle de Pedidos del Turno</h3>
+          <p className="text-sm text-gray-500 mt-1">{ordenes.length} pedido(s) en este turno</p>
+        </div>
+        {ordenes.length === 0 ? (
+          <div className="p-8 text-center text-gray-400 font-semibold">Sin pedidos registrados</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3 text-left">Pedido</th>
+                  <th className="px-4 py-3 text-left">Cliente</th>
+                  <th className="px-4 py-3 text-left">Entrega</th>
+                  <th className="px-4 py-3 text-left">Origen</th>
+                  <th className="px-4 py-3 text-left">Pago</th>
+                  <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3 text-left">Cajero / Cobró</th>
+                  <th className="px-4 py-3 text-center">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {ordenes.map((o) => {
+                  const pagoLabel: Record<string, string> = {
+                    efectivo: 'Efectivo', tarjeta: 'Tarjeta', no_pago: 'Sin cobro',
+                  };
+                  const entregaLabel: Record<string, string> = {
+                    domicilio: 'Domicilio', sucursal: 'Sucursal', para_llevar: 'Para Llevar',
+                  };
+                  const origenColor: Record<string, string> = {
+                    web: 'bg-blue-100 text-blue-700',
+                    llamada: 'bg-yellow-100 text-yellow-700',
+                    presencial: 'bg-purple-100 text-purple-700',
+                  };
+                  const cobrador = o.cajero_nombre || o.liquidado_por || (o.liquidado ? 'Caja' : '—');
+                  return (
+                    <tr key={o.order_id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-bold text-gray-900">{o.order_id}</td>
+                      <td className="px-4 py-3 text-gray-700">{o.cliente_nombre || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600 capitalize">
+                        {entregaLabel[o.metodo_entrega || ''] || o.metodo_entrega || '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${origenColor[o.order_origin || ''] || 'bg-gray-100 text-gray-600'}`}>
+                          {o.order_origin || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {pagoLabel[o.payment_method || ''] || o.payment_method || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-black text-red-600">
+                        ${Number(o.total || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        <span className="flex items-center gap-1">
+                          <User size={12} />
+                          {cobrador}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {o.liquidado ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-green-100 text-green-700 uppercase">Liquidado</span>
+                        ) : (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            o.status === 'entregado' ? 'bg-slate-100 text-slate-600' :
+                            o.status === 'listo' ? 'bg-green-100 text-green-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>{o.status}</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                <tr>
+                  <td colSpan={5} className="px-4 py-3 font-bold text-gray-700">Total del Turno</td>
+                  <td className="px-4 py-3 text-right font-black text-xl text-red-600">
+                    ${ordenes.reduce((s, o) => s + Number(o.total || 0), 0).toLocaleString()}
+                  </td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* NOTA */}

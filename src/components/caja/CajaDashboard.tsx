@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Clock, Plus, Eye, BarChart3, LogOut } from 'lucide-react';
+import { Clock, Plus, Eye, BarChart3, LogOut, Search } from 'lucide-react';
 import NewOrderForm from './NewOrderForm';
 import ActiveOrdersList from './ActiveOrdersList';
 import CashRegisterPanel from './CashRegisterPanel';
 import ShiftReportModal from './ShiftReportModal';
+import BuscarPedidoModal from './BuscarPedidoModal';
 import { CajaTurno } from '@/data/caja-types';
 import { API_URL } from '@/lib/socket';
 
@@ -31,6 +32,7 @@ interface CajaDashboardProps {
 const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, onLogout }) => {
   const [activeTab, setActiveTab] = useState<'nuevo' | 'ordenes' | 'caja' | 'cerrar'>('nuevo');
   const [showShiftModal, setShowShiftModal] = useState(false);
+  const [showBuscarModal, setShowBuscarModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [currentTime, setCurrentTime] = useState(() => {
@@ -143,7 +145,7 @@ const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, on
         {/* SPACER */}
         <div className="flex-1" />
 
-        {/* BRAND + INFO + LOGOUT */}
+        {/* BRAND + INFO + BUSCAR + LOGOUT */}
         <div className="flex items-center gap-3 px-4 border-l border-gray-200">
           <img src="/logohd.png" alt="Capriccio" className="h-8 w-auto" />
           <div>
@@ -153,9 +155,17 @@ const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, on
               {' • '}Hora: <span className="font-mono text-red-600">{currentTime}</span>
             </p>
           </div>
+          {/* BOTÓN BUSCAR PEDIDO */}
+          <button
+            onClick={() => setShowBuscarModal(true)}
+            className="flex items-center gap-2 ml-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition text-sm"
+          >
+            <Search size={16} />
+            Buscar Pedido
+          </button>
           <button
             onClick={onLogout}
-            className="flex items-center gap-1 ml-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition text-sm"
+            className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition text-sm"
           >
             <LogOut size={18} />
             Salir
@@ -188,6 +198,11 @@ const CajaDashboard: React.FC<CajaDashboardProps> = ({ turno, onTurnoCreated, on
       {/* SHIFT REPORT MODAL */}
       {showShiftModal && (
         <ShiftReportModal turno={turno} onClose={() => setShowShiftModal(false)} />
+      )}
+
+      {/* BUSCAR PEDIDO MODAL */}
+      {showBuscarModal && (
+        <BuscarPedidoModal turno={turno} onClose={() => setShowBuscarModal(false)} />
       )}
     </div>
   );
