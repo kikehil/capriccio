@@ -1620,6 +1620,31 @@ app.post('/api/caja/pedidos', authorize(['admin', 'caja', 'responsable']), async
             cambio: monto_recibido > 0 ? monto_recibido - total : 0,
             total: total
         });
+
+        // Notificar al cliente por WhatsApp (mismo webhook n8n que el sistema de pedidos en línea)
+        // Solo si hay número de teléfono del cliente
+        if (telefono) {
+            const metodoPagoLabel = payment_method === 'tarjeta' ? 'Tarjeta' : payment_method === 'no_pago' ? 'Pago en entrega' : 'Efectivo';
+            const n8nPayload = {
+                cliente_nombre: cliente_nombre || 'Cliente',
+                cliente_telefono: telefono,
+                direccion_entrega: direccion || (metodo_entrega === 'sucursal' || metodo_entrega === 'para_llevar' ? 'Recoger en sucursal' : ''),
+                referencias: null,
+                coordenadas: null,
+                metodo_pago: metodoPagoLabel,
+                total_pagar: total,
+                lista_articulos: items.map(i => ({
+                    cantidad: i.quantity || i.cantidad || 1,
+                    producto: i.nombre || i.pizza_nombre || '',
+                    tamano: i.size || i.tamano || '',
+                    orilla_extra: i.crust || 'Normal',
+                    precio_unitario: i.totalItemPrice || i.precio_unitario || 0
+                }))
+            };
+            httpPost('https://n8n-n8n.amv1ou.easypanel.host/webhook/nuevo-pedido', n8nPayload)
+                .then(() => console.log(`[Caja] ✅ WhatsApp enviado a ${telefono}`))
+                .catch(e => console.warn(`[Caja] ⚠️  WhatsApp no enviado: ${e.message}`));
+        }
     } catch (e) {
         console.error('Error al crear pedido en caja:', e);
         res.status(500).json({ error: 'Error al crear pedido' });
