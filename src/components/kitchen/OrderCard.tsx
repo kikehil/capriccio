@@ -60,7 +60,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, onCompleteInSt
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 1.1, opacity: 0 }}
-            className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col h-full border-2 border-slate-100 relative"
+            className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col border-2 border-slate-100 relative"
         >
             <div className={cn("p-6 flex justify-between items-center transition-colors duration-500", statusColor)}>
                 <div>
@@ -81,7 +81,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onComplete, onCompleteInSt
                 </div>
             </div>
 
-            <div className="p-8 flex-grow space-y-6">
+            <div className="p-8 space-y-6">
                 {order.items.map((item, idx) => (
                     <div key={idx} className="relative pl-6 border-l-4 border-slate-100 font-title">
                         <p className="text-2xl font-black italic text-slate-900 uppercase leading-none tracking-tighter mb-2">
