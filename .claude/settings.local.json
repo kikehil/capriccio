@@ -114,7 +114,17 @@
       "Bash(apt list:*)",
       "Bash(expect -c ':*)",
       "Bash(pip3 install:*)",
-      "Bash(python -c \"import paramiko; print\\(''ok''\\)\")"
+      "Bash(python -c \"import paramiko; print\\(''ok''\\)\")",
+      "Bash(sshpass -p 'Netbios+2026' ssh -o StrictHostKeyChecking=no root@76.13.24.103 \"cd /root/capriccio && git pull && pm2 restart all\")",
+      "Bash(where ssh:*)",
+      "Bash(plink -ssh root@76.13.24.103 -pw \"Netbios+2026\" \"cd /root/capriccio && git pull && pm2 restart all && pm2 list\")",
+      "Bash(plink -ssh root@76.13.24.103 -pw \"Netbios+2026\" \"cd /root/capriccio && git pull && npm run build 2>&1 | tail -20 && pm2 restart capriccio-web && echo DONE\")",
+      "Bash(plink -ssh root@76.13.24.103 -pw \"Netbios+2026\" \"cd /root/capriccio && git pull && npm run build 2>&1 | tail -8 && pm2 restart all && echo DONE\")",
+      "Bash(plink -ssh root@76.13.24.103 -pw \"Netbios+2026\" \"cd /root/capriccio && git pull && npm run build 2>&1 | tail -8 && pm2 restart capriccio-web && echo DONE\")",
+      "Bash(plink -ssh root@76.13.24.103 -pw \"Netbios+2026\" \"cd /root/capriccio && git pull && npm run build 2>&1 | tail -5 && pm2 restart capriccio-web && echo DONE\")",
+      "Bash(plink -ssh root@76.13.24.103 -pw \"Netbios+2026\" \"cd /root/capriccio && git pull && pm2 restart capriccio-api && echo DONE\")",
+      "Bash(plink -ssh root@76.13.24.103 -pw \"Netbios+2026\" \"cd /root/capriccio && git pull && npm run build 2>&1 | tail -6 && pm2 restart capriccio-web && echo DONE\")",
+      "Bash(find /d/WEB/pizzaOK/.claude/worktrees/charming-cori -type f -name *.js -o -name *.jsx -o -name *.ts -o -name *.tsx)"
     ]
   }
 }
