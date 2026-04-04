@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Clock, AlertCircle, RefreshCcw, ChefHat, Bike, Store, ShoppingBag } from 'lucide-react';
+import { Check, Clock, RefreshCcw, ChefHat, Bike, Store, ShoppingBag } from 'lucide-react';
 import { CartItem } from '@/data/cart';
 import { getSocket, API_URL } from '@/lib/socket';
 import { cn } from '@/lib/utils';
@@ -48,24 +48,30 @@ const KitchenDisplay = () => {
     const [currentTime, setCurrentTime] = useState<string>('');
     const [isLoaded, setIsLoaded] = useState(false);
     const [lastSync, setLastSync] = useState<Date>(new Date());
-    const [sessionExpired, setSessionExpired] = useState(false);
 
     const fetchOrders = async () => {
         setIsLoaded(false);
-        console.log("🔍 [Cocina] Sincronizando desde:", `${API_URL}/api/pedidos`);
         try {
-            const token = localStorage.getItem('capriccio_token_cocina');
-            const response = await fetch(`${API_URL}/api/pedidos`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+            let token = localStorage.getItem('capriccio_token_cocina');
+            let response = await fetch(`${API_URL}/api/pedidos`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+            // Si token expirado: renovar y reintentar automáticamente
+            if (response.status === 401 || response.status === 403) {
+                console.warn('🔑 [Cocina] fetchOrders 401 — renovando token...');
+                const renewed = await refreshToken();
+                if (renewed) {
+                    token = localStorage.getItem('capriccio_token_cocina');
+                    response = await fetch(`${API_URL}/api/pedidos`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                }
+            }
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             const data = await response.json();
-
-            // Mapear y filtrar pedidos activos (recibido, preparando, en_preparacion)
-            // ORDENAR: Más recientes primero para que no se pierdan al final
             const activeOrders = data
                 .filter((o: any) => o.status === 'recibido' || o.status === 'preparando' || o.status === 'pending' || o.status === 'pendiente' || o.status === 'en_preparacion')
                 .map((o: any) => ({
@@ -78,17 +84,18 @@ const KitchenDisplay = () => {
                 .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
             setOrders(activeOrders);
-            setIsLoaded(true);
             setLastSync(new Date());
         } catch (error) {
             console.error("❌ [Cocina] Error al obtener pedidos:", error);
+        } finally {
             setIsLoaded(true);
         }
     };
 
-    // 1. Carga inicial de pedidos, Reloj y renovación automática de token cada 12h
+    // 1. Carga inicial: renovar token PRIMERO, luego cargar pedidos
     useEffect(() => {
-        fetchOrders();
+        // Renovar token inmediatamente al montar (garantiza sesión fresca)
+        refreshToken().then(() => fetchOrders());
 
         const updateTime = () => {
             setCurrentTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }));
@@ -96,11 +103,11 @@ const KitchenDisplay = () => {
         updateTime();
         const timer = setInterval(updateTime, 10000);
 
-        // Renovar token cada 12 horas para que nunca expire en cocina
+        // Renovar token cada 30 minutos (mucho más frecuente que antes)
         const tokenRefreshInterval = setInterval(async () => {
             console.log('🔑 [Cocina] Renovación periódica de token...');
             await refreshToken();
-        }, 12 * 60 * 60 * 1000);
+        }, 30 * 60 * 1000);
 
         return () => {
             clearInterval(timer);
@@ -161,13 +168,11 @@ const KitchenDisplay = () => {
     useEffect(() => {
         const handleVisibility = () => {
             if (document.visibilityState === 'visible') {
-                console.log("👁️ [Cocina] Pantalla visible — refrescando pedidos");
-                fetchOrders();
-                // Reconectar socket si se desconectó
+                console.log("👁️ [Cocina] Pantalla visible — renovando token y refrescando pedidos");
+                // Renovar token primero, luego recargar pedidos
+                refreshToken().then(() => fetchOrders());
                 const socket = getSocket();
-                if (socket && !socket.connected) {
-                    socket.connect();
-                }
+                if (socket && !socket.connected) socket.connect();
             }
         };
         document.addEventListener('visibilitychange', handleVisibility);
@@ -187,18 +192,11 @@ const KitchenDisplay = () => {
         try {
             let resp = await doFetch();
             if (resp.status === 401 || resp.status === 403) {
-                console.warn('⚠️ [Cocina] Token expirado, renovando...');
-                const refreshed = await refreshToken();
-                if (refreshed) {
-                    resp = await doFetch(); // reintento con nuevo token
-                } else {
-                    setSessionExpired(true);
-                    return false;
-                }
+                console.warn('🔑 [Cocina] PATCH 401 — renovando token y reintentando...');
+                await refreshToken();
+                resp = await doFetch(); // siempre reintentar tras refresh
             }
-            if (!resp.ok) return false;
-            setSessionExpired(false);
-            return true;
+            return resp.ok;
         } catch (error) {
             console.error('Error PATCH:', error);
             return false;
@@ -297,26 +295,7 @@ const KitchenDisplay = () => {
 
     return (
         <div className="min-h-screen bg-slate-950 p-4 md:p-8">
-            {sessionExpired && (
-                <div className="mb-6 flex items-center gap-4 bg-red-900/70 border border-red-600 text-red-200 px-6 py-4 rounded-2xl">
-                    <AlertCircle className="text-red-400 flex-shrink-0" size={22} />
-                    <p className="font-bold text-sm flex-1">
-                        ⚠️ Sesión expirada — los botones no responden. Renovando sesión...
-                    </p>
-                    <button
-                        onClick={async () => {
-                            const ok = await refreshToken();
-                            if (ok) setSessionExpired(false);
-                            else window.location.reload();
-                        }}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition"
-                    >
-                        Renovar
-                    </button>
-                </div>
-            )}
-
-            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-slate-800 pb-8">
+<header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-slate-800 pb-8">
                 <div className="flex items-center gap-6">
                     <img src="/logohd.png" alt="Logo" className="h-20 w-auto drop-shadow-lg" />
                     <div>
