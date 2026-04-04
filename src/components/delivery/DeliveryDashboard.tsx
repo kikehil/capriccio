@@ -7,6 +7,25 @@ import { cn } from '@/lib/utils';
 import { RepartidorMap } from './MapIndex';
 import { getSocket, API_URL } from '@/lib/socket';
 
+// Renueva el token silenciosamente (acepta tokens expirados en el servidor)
+const refreshToken = async (): Promise<boolean> => {
+    try {
+        const token = localStorage.getItem('capriccio_token_repartidor');
+        if (!token) return false;
+        const resp = await fetch(`${API_URL}/api/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            localStorage.setItem('capriccio_token_repartidor', data.token);
+            console.log('🔑 [Repartidor] Token renovado');
+            return true;
+        }
+        return false;
+    } catch { return false; }
+};
+
 function getElapsedTime(createdAt?: string): string {
     if (!createdAt) return '—';
     const diff = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
@@ -53,10 +72,6 @@ const DeliveryDashboard = () => {
     const [nameInput, setNameInput] = useState('');
     const [tick, setTick] = useState(0);
 
-    const handleAuthError = () => {
-        localStorage.removeItem('capriccio_token_repartidor');
-        window.location.reload();
-    };
 
     useEffect(() => {
         const interval = setInterval(() => setTick(t => t + 1), 30000);
@@ -66,13 +81,20 @@ const DeliveryDashboard = () => {
     const fetchInitialOrders = async () => {
         setIsLoaded(false);
         try {
-            const token = localStorage.getItem('capriccio_token_repartidor');
-            const res = await fetch(`${API_URL}/api/pedidos`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+            let token = localStorage.getItem('capriccio_token_repartidor');
+            let res = await fetch(`${API_URL}/api/pedidos`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.status === 401) { handleAuthError(); return; }
+            // Token expirado: renovar y reintentar automáticamente
+            if (res.status === 401 || res.status === 403) {
+                console.warn('🔑 [Repartidor] 401 — renovando token...');
+                await refreshToken();
+                token = localStorage.getItem('capriccio_token_repartidor');
+                res = await fetch(`${API_URL}/api/pedidos`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            }
+            if (!res.ok) { setIsLoaded(true); return; }
             const data = await res.json();
 
             if (Array.isArray(data)) {
@@ -103,7 +125,11 @@ const DeliveryDashboard = () => {
         const savedName = localStorage.getItem('capriccio_repartidor_nombre');
         if (savedName) setRepartidorName(savedName);
 
-        fetchInitialOrders();
+        // Renovar token al montar y luego cargar pedidos
+        refreshToken().then(() => fetchInitialOrders());
+
+        // Renovar token cada 30 minutos
+        const tokenInterval = setInterval(() => refreshToken(), 30 * 60 * 1000);
 
         if ("geolocation" in navigator) {
             const watchId = navigator.geolocation.watchPosition(
@@ -111,8 +137,9 @@ const DeliveryDashboard = () => {
                 (err) => console.warn(err),
                 { enableHighAccuracy: true }
             );
-            return () => navigator.geolocation.clearWatch(watchId);
+            return () => { navigator.geolocation.clearWatch(watchId); clearInterval(tokenInterval); };
         }
+        return () => clearInterval(tokenInterval);
     }, []);
 
     useEffect(() => {
@@ -189,8 +216,8 @@ const DeliveryDashboard = () => {
     useEffect(() => {
         const handleVisibility = () => {
             if (document.visibilityState === 'visible') {
-                console.log("👁️ [Repartidor] Pantalla visible — refrescando pedidos");
-                fetchInitialOrders();
+                console.log("👁️ [Repartidor] Pantalla visible — renovando token y refrescando");
+                refreshToken().then(() => fetchInitialOrders());
                 // Reconectar socket si se desconectó
                 const socket = getSocket();
                 if (socket && !socket.connected) {
@@ -220,24 +247,33 @@ const DeliveryDashboard = () => {
         setRepartidorName(null);
     };
 
+    const patchWithAuth = async (url: string, body: object): Promise<boolean> => {
+        const doFetch = async () => {
+            const token = localStorage.getItem('capriccio_token_repartidor');
+            return fetch(url, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(body)
+            });
+        };
+        let resp = await doFetch();
+        if (resp.status === 401 || resp.status === 403) {
+            console.warn('🔑 [Repartidor] PATCH 401 — renovando token...');
+            await refreshToken();
+            resp = await doFetch();
+        }
+        return resp.ok;
+    };
+
     const autoAsignar = async (id: string) => {
         const order = pedidosListos.find(p => p.id === id);
         if (!order) return;
         try {
-            const token = localStorage.getItem('capriccio_token_repartidor');
-            const res = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    status: 'en_reparto',
-                    repartidor: repartidorName
-                })
-            });
-            if (res.status === 401) { handleAuthError(); return; }
-            if (res.ok) {
+            const ok = await patchWithAuth(
+                `${API_URL}/api/pedidos/${order.order_id || id}/status`,
+                { status: 'en_reparto', repartidor: repartidorName }
+            );
+            if (ok) {
                 // Actualizar localmente
                 setPedidosListos(prev => prev.map(p =>
                     p.id === id ? { ...p, status: 'en_reparto', repartidor: repartidorName || '' } : p
@@ -246,7 +282,6 @@ const DeliveryDashboard = () => {
             }
         } catch (error) {
             console.error("Error al auto-asignar:", error);
-            alert("Error de conexión con el servidor.");
         }
     };
 
@@ -254,29 +289,16 @@ const DeliveryDashboard = () => {
         const order = pedidosListos.find(p => p.id === id);
         if (!order) return;
         try {
-            const token = localStorage.getItem('capriccio_token_repartidor');
-            const res = await fetch(`${API_URL}/api/pedidos/${order.order_id || id}/status`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    status: 'entregado',
-                    repartidor: repartidorName
-                })
-            });
-            if (res.status === 401) { handleAuthError(); return; }
-            if (res.ok) {
+            const ok = await patchWithAuth(
+                `${API_URL}/api/pedidos/${order.order_id || id}/status`,
+                { status: 'entregado', repartidor: repartidorName }
+            );
+            if (ok) {
                 setPedidosListos(prev => prev.filter(p => p.id !== id));
                 if (selectedOrder?.id === id) setIsMapOpen(false);
-            } else {
-                const errData = await res.json();
-                alert(`Error: ${errData.error || 'No se pudo marcar como entregado'}`);
             }
         } catch (error) {
             console.error("Error al entregar:", error);
-            alert("Error de conexión con el servidor. Verifica tu internet.");
         }
     };
 
