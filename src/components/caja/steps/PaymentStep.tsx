@@ -31,8 +31,13 @@ const PaymentStep: React.FC<StepProps> = ({
 
   const handlePaymentMethodSelect = (method: PaymentMethod) => {
     updateFormData({ payment_method: method });
-    if (method === 'no_pago') {
+    if (method === 'efectivo') {
+      // Pre-llenar con el total exacto; cajero puede modificar si recibe más
+      setMontoRecibido(String(formData.total));
+      setErrors('');
+    } else {
       setMontoRecibido('');
+      setErrors('');
     }
   };
 

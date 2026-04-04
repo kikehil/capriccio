@@ -1511,8 +1511,13 @@ app.post('/api/caja/pedidos', authorize(['admin', 'caja', 'responsable']), async
             }
         }
 
-        // Validar que monto_recibido >= total si se paga en caja
-        if (payment_method !== 'no_pago' && (monto_recibido || 0) < total) {
+        // Si se paga en caja pero no se ingresó monto, asumir pago exacto
+        const montoFinal = (payment_method !== 'no_pago' && (!monto_recibido || isNaN(Number(monto_recibido))))
+            ? total
+            : Number(monto_recibido);
+
+        // Validar que monto_recibido >= total si se paga con efectivo
+        if (payment_method === 'efectivo' && montoFinal < total) {
             return res.status(400).json({ error: 'Monto insuficiente' });
         }
 
@@ -1530,7 +1535,7 @@ app.post('/api/caja/pedidos', authorize(['admin', 'caja', 'responsable']), async
                 order_id, cliente_nombre, telefono, direccion, referencias || null, total,
                 'recibido', negocio_id, telefono || null, metodo_entrega,
                 order_origin, req.user.id, req.user.username, payment_method,
-                monto_recibido || null, payment_method !== 'no_pago' ? new Date().toISOString() : null
+                payment_method !== 'no_pago' ? montoFinal : null, payment_method !== 'no_pago' ? new Date().toISOString() : null
             ]
         );
 
