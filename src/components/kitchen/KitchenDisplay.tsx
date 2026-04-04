@@ -216,7 +216,6 @@ const KitchenDisplay = () => {
     };
 
     const generateTicketPDF = (order: KitchenOrder) => {
-        // Generar ticket como ventana de impresión
         const items = order.items.map(item => {
             let line = `${item.quantity}x ${item.nombre}`;
             if ((item as any).size) line += ` (${(item as any).size})`;
@@ -230,42 +229,62 @@ const KitchenDisplay = () => {
         const shortId = orderId.split('-')[1] || orderId.slice(-4);
         const fecha = new Date().toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-        const ticketHTML = `
-<!DOCTYPE html>
-<html><head><title>Ticket #${shortId}</title>
+        const ticketHTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Ticket #${shortId}</title>
 <style>
-    body { font-family: 'Courier New', monospace; width: 280px; margin: 0 auto; padding: 10px; font-size: 12px; }
+    @page { margin: 0; size: 80mm auto; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Courier New', monospace; width: 76mm; margin: 0; padding: 4mm; font-size: 11px; line-height: 1.3; }
     .center { text-align: center; }
     .bold { font-weight: bold; }
-    .line { border-top: 1px dashed #000; margin: 8px 0; }
-    .item { margin: 4px 0; }
-    h2 { margin: 4px 0; font-size: 16px; }
-    @media print { body { width: 100%; } }
+    .line { border-top: 1px dashed #000; margin: 4px 0; }
+    h2 { margin: 2px 0; font-size: 15px; letter-spacing: 1px; }
+    pre { white-space: pre-wrap; font-size: 11px; font-family: inherit; margin: 0; }
 </style></head>
 <body>
-    <div class="center bold"><h2>CAPRICCIO PIZZERIA</h2></div>
-    <div class="line"></div>
-    <div class="center bold">PEDIDO #${shortId}</div>
-    <div class="center">${fecha}</div>
-    ${(order as any).nombre_cliente ? `<div>Cliente: ${(order as any).nombre_cliente}</div>` : ''}
-    ${(order as any).telefono_cliente ? `<div>Tel: ${(order as any).telefono_cliente}</div>` : ''}
-    ${(order as any).metodo_entrega ? `<div>Entrega: ${(order as any).metodo_entrega}</div>` : ''}
-    ${(order as any).direccion ? `<div>Dir: ${(order as any).direccion}</div>` : ''}
-    <div class="line"></div>
-    <pre style="white-space:pre-wrap;font-size:12px;">${items}</pre>
-    <div class="line"></div>
-    ${order.total ? `<div class="bold" style="text-align:right;font-size:14px;">TOTAL: $${order.total.toLocaleString()}</div>` : ''}
-    ${(order as any).notas ? `<div class="line"></div><div>Notas: ${(order as any).notas}</div>` : ''}
-    <div class="line"></div>
-    <div class="center" style="font-size:10px;color:#888;">PEDIDO LISTO - IMPRESO DESDE COCINA</div>
+<div class="center bold"><h2>CAPRICCIO PIZZERIA</h2></div>
+<div class="line"></div>
+<div class="center bold" style="font-size:14px;">PEDIDO #${shortId}</div>
+<div class="center">${fecha}</div>
+${(order as any).cliente_nombre ? `<div>Cliente: <b>${(order as any).cliente_nombre}</b></div>` : ''}
+${(order as any).metodo_entrega ? `<div>Entrega: ${(order as any).metodo_entrega.toUpperCase()}</div>` : ''}
+${(order as any).direccion && (order as any).direccion !== 'Recoger en sucursal' ? `<div>Dir: ${(order as any).direccion}</div>` : ''}
+<div class="line"></div>
+<pre>${items}</pre>
+<div class="line"></div>
+${order.total ? `<div class="bold" style="text-align:right;font-size:13px;">TOTAL: $${order.total.toLocaleString()}</div>` : ''}
+${(order as any).notas ? `<div class="line"></div><div><b>Notas:</b> ${(order as any).notas}</div>` : ''}
+<div class="line"></div>
+<div class="center" style="font-size:9px;">*** LISTO PARA ENTREGA ***</div>
 </body></html>`;
 
-        const w = window.open('', '_blank', 'width=320,height=500');
-        if (w) {
-            w.document.write(ticketHTML);
-            w.document.close();
-            setTimeout(() => { w.print(); }, 300);
-        }
+        // Imprimir en iframe oculto — NO abre nueva ventana ni diálogo si Chrome usa --kiosk-printing
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;border:none;';
+        document.body.appendChild(iframe);
+
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!doc) return;
+        doc.open();
+        doc.write(ticketHTML);
+        doc.close();
+
+        iframe.onload = () => {
+            try {
+                iframe.contentWindow?.focus();
+                iframe.contentWindow?.print();
+            } catch (e) {
+                console.error('Error al imprimir:', e);
+            }
+            // Eliminar iframe tras imprimir
+            iframe.contentWindow?.addEventListener('afterprint', () => {
+                document.body.removeChild(iframe);
+            });
+            // Fallback: eliminar después de 10s si afterprint no dispara
+            setTimeout(() => {
+                if (document.body.contains(iframe)) document.body.removeChild(iframe);
+            }, 10000);
+        };
     };
 
     const completeOrder = async (id: string) => {
