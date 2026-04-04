@@ -416,10 +416,9 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
     const sortByOldest = (arr: Order[]) =>
         [...arr].sort((a, b) => parseDate(a.created_at) - parseDate(b.created_at));
 
-    // Pedidos activos: todo lo que no está entregado ni cancelado
-    // (independientemente de si está liquidado o no — un pedido puede estar
-    //  pagado pero aún en cocina/camino, y debe seguir visible en el kanban)
+    // Pedidos activos: no entregado/despachado/cancelado Y no liquidado
     const isActive = (o: Order) =>
+        !o.liquidado &&
         o.status !== 'entregado' && o.status !== 'despachado' && o.status !== 'cancelado';
 
     const domicilioOrders = sortByOldest(orders.filter(o =>
