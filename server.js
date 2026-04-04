@@ -1669,15 +1669,15 @@ app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'caja', 'respon
              FROM pedidos p
              LEFT JOIN detalle_pedidos dp ON p.id = dp.pedido_id
              WHERE (
-                 (p.cajero_id = $1 AND DATE(p.created_at) = DATE($2))
+                 (p.cajero_id = $1 AND p.created_at >= $2 AND p.created_at <= $3)
                  OR (p.order_origin = 'web'
                      AND p.metodo_entrega IN ('sucursal', 'para_llevar')
-                     AND p.created_at >= $3
-                     AND p.created_at <= $4)
+                     AND p.created_at >= $2
+                     AND p.created_at <= $3)
              )
              GROUP BY p.id
              ORDER BY p.created_at DESC`,
-            [turno.cajero_id, turno.abierto_at, turno.abierto_at, cerradoAt]
+            [turno.cajero_id, turno.abierto_at, cerradoAt]
         );
 
         // Calcular resumen (POS + pedidos web de sucursal/para_llevar durante el turno)
@@ -1692,13 +1692,13 @@ app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'caja', 'respon
                 SUM(CASE WHEN order_origin = 'web' THEN 1 ELSE 0 END) as ordenes_web
              FROM pedidos
              WHERE (
-                 (cajero_id = $1 AND DATE(created_at) = DATE($2))
+                 (cajero_id = $1 AND created_at >= $2 AND created_at <= $3)
                  OR (order_origin = 'web'
                      AND metodo_entrega IN ('sucursal', 'para_llevar')
-                     AND created_at >= $3
-                     AND created_at <= $4)
+                     AND created_at >= $2
+                     AND created_at <= $3)
              )`,
-            [turno.cajero_id, turno.abierto_at, turno.abierto_at, cerradoAt]
+            [turno.cajero_id, turno.abierto_at, cerradoAt]
         );
 
         res.json({
