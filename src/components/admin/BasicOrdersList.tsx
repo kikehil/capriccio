@@ -416,8 +416,14 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
     const sortByOldest = (arr: Order[]) =>
         [...arr].sort((a, b) => parseDate(a.created_at) - parseDate(b.created_at));
 
+    // Pedidos activos: todo lo que no está entregado ni cancelado
+    // (independientemente de si está liquidado o no — un pedido puede estar
+    //  pagado pero aún en cocina/camino, y debe seguir visible en el kanban)
+    const isActive = (o: Order) =>
+        o.status !== 'entregado' && o.status !== 'despachado' && o.status !== 'cancelado';
+
     const domicilioOrders = sortByOldest(orders.filter(o =>
-        !o.liquidado && (
+        isActive(o) && (
             o.metodo_entrega === 'domicilio' ||
             (!o.metodo_entrega && o.direccion !== 'Recoger en sucursal')
         )
@@ -425,7 +431,7 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
 
     // Para Llevar: POS para_llevar + web sucursal (legacy) + legacy "Recoger en sucursal" address
     const paraLlevarOrders = sortByOldest(orders.filter(o =>
-        !o.liquidado && (
+        isActive(o) && (
             o.metodo_entrega === 'para_llevar' ||
             (o.metodo_entrega === 'sucursal' && o.order_origin === 'web') ||
             (!o.metodo_entrega && o.direccion === 'Recoger en sucursal')
@@ -434,7 +440,7 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
 
     // Consumo en Sucursal: POS sucursal only (caja, not web)
     const consumoSucursalOrders = sortByOldest(orders.filter(o =>
-        !o.liquidado && o.metodo_entrega === 'sucursal' && o.order_origin !== 'web'
+        isActive(o) && o.metodo_entrega === 'sucursal' && o.order_origin !== 'web'
     ));
 
     return (
