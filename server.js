@@ -165,8 +165,10 @@ app.post('/api/auth/refresh', (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Token requerido' });
     const token = authHeader.split(' ')[1];
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ error: 'Token inválido o expirado' });
+    // ignoreExpiration: permite renovar aunque el token ya haya expirado
+    // (pantallas de cocina/repartidor permanecen abiertas indefinidamente)
+    jwt.verify(token, JWT_SECRET, { ignoreExpiration: true }, (err, user) => {
+        if (err) return res.status(403).json({ error: 'Token inválido' });
         const longLivedRoles = ['cocina', 'repartidor', 'caja'];
         const tokenExpiry = longLivedRoles.includes(user.role) ? '365d' : '7d';
         const newToken = jwt.sign({
