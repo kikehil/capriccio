@@ -1626,17 +1626,26 @@ app.post('/api/caja/pedidos', authorize(['admin', 'caja', 'responsable']), async
     }
 });
 
-// GET /api/caja/pedidos/turno/:turno_id — Obtiene todos los pedidos de un turno
+// GET /api/caja/pedidos/turno/:turno_id — Obtiene todos los pedidos activos del turno
+// Incluye pedidos POS y pedidos web creados dentro del rango horario del turno
 app.get('/api/caja/pedidos/turno/:turno_id', authorize(['admin', 'caja', 'responsable']), async (req, res) => {
     const { turno_id } = req.params;
 
     try {
+        // Obtener rango del turno
+        const turnoRes = await db.query('SELECT * FROM caja_turno WHERE id = $1', [turno_id]);
+        if (turnoRes.rows.length === 0) return res.status(404).json({ error: 'Turno no encontrado' });
+        const turno = turnoRes.rows[0];
+        const cerradoAt = turno.cerrado_at || new Date().toISOString();
+
+        // Todos los pedidos activos creados durante el turno (POS + web)
         const result = await db.query(
             `SELECT p.* FROM pedidos p
-             INNER JOIN caja_pagos_detalle cpd ON p.id = cpd.pedido_id
-             WHERE cpd.turno_id = $1
+             WHERE p.created_at >= $1
+               AND p.created_at <= $2
+               AND p.status NOT IN ('cancelado', 'entregado')
              ORDER BY p.created_at DESC`,
-            [turno_id]
+            [turno.abierto_at, cerradoAt]
         );
         res.json(result.rows);
     } catch (e) {
@@ -1669,23 +1678,18 @@ app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'caja', 'respon
         // Obtener órdenes del turno:
         //   - Pedidos POS del cajero en la fecha del turno
         //   - Pedidos web para recoger/consumir en sucursal creados durante el turno
+        // Todos los pedidos creados durante el rango del turno (POS + web, todos los métodos)
         const ordenesResult = await db.query(
             `SELECT p.*, COUNT(dp.id) as items_count
              FROM pedidos p
              LEFT JOIN detalle_pedidos dp ON p.id = dp.pedido_id
-             WHERE (
-                 (p.cajero_id = $1 AND p.created_at >= $2 AND p.created_at <= $3)
-                 OR (p.order_origin = 'web'
-                     AND p.metodo_entrega IN ('sucursal', 'para_llevar')
-                     AND p.created_at >= $2
-                     AND p.created_at <= $3)
-             )
+             WHERE p.created_at >= $1 AND p.created_at <= $2
              GROUP BY p.id
              ORDER BY p.created_at DESC`,
-            [turno.cajero_id, turno.abierto_at, cerradoAt]
+            [turno.abierto_at, cerradoAt]
         );
 
-        // Calcular resumen (POS + pedidos web de sucursal/para_llevar durante el turno)
+        // Resumen de todos los pedidos del turno
         const resumenResult = await db.query(
             `SELECT
                 COUNT(*) as total_ordenes,
@@ -1696,14 +1700,8 @@ app.get('/api/caja/reporte/turno/:turno_id', authorize(['admin', 'caja', 'respon
                 SUM(CASE WHEN order_origin = 'presencial' THEN 1 ELSE 0 END) as ordenes_presencial,
                 SUM(CASE WHEN order_origin = 'web' THEN 1 ELSE 0 END) as ordenes_web
              FROM pedidos
-             WHERE (
-                 (cajero_id = $1 AND created_at >= $2 AND created_at <= $3)
-                 OR (order_origin = 'web'
-                     AND metodo_entrega IN ('sucursal', 'para_llevar')
-                     AND created_at >= $2
-                     AND created_at <= $3)
-             )`,
-            [turno.cajero_id, turno.abierto_at, cerradoAt]
+             WHERE created_at >= $1 AND created_at <= $2`,
+            [turno.abierto_at, cerradoAt]
         );
 
         res.json({
