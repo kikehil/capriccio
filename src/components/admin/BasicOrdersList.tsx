@@ -481,7 +481,7 @@ const BasicOrdersList: React.FC<BasicOrdersListProps> = ({ onStatusChange }) => 
                         liquidatingId={isLiquidating}
                     />
                     <ColumnSection
-                        title="Para Llevar"
+                        title="Para Recoger / Para Llevar"
                         count={paraLlevarOrders.length}
                         icon={<ShoppingBag size={20} />}
                         colorClass="bg-amber-50 border-amber-100 text-amber-800"
