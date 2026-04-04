@@ -75,7 +75,7 @@ const KitchenDisplay = () => {
                     createdAt: o.created_at || o.createdAt || new Date().toISOString(),
                     status: (o.status === 'recibido' || o.status === 'pending' || o.status === 'pendiente') ? 'pending' : 'preparing'
                 }))
-                .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
             setOrders(activeOrders);
             setIsLoaded(true);
@@ -124,16 +124,16 @@ const KitchenDisplay = () => {
             setOrders(prev => {
                 const resolvedId = pedido.order_id || pedido.id;
                 if (prev.some(o => o.id === resolvedId)) return prev;
-                return [
-                    {
-                        ...pedido,
-                        id: resolvedId,
-                        order_id: resolvedId,
-                        createdAt: pedido.created_at || pedido.createdAt || new Date().toISOString(),
-                        status: 'pending'
-                    },
-                    ...prev
-                ];
+                const newOrder = {
+                    ...pedido,
+                    id: resolvedId,
+                    order_id: resolvedId,
+                    createdAt: pedido.created_at || pedido.createdAt || new Date().toISOString(),
+                    status: 'pending' as const
+                };
+                return [...prev, newOrder].sort((a, b) =>
+                    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                );
             });
         };
 
