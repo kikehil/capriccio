@@ -1969,7 +1969,7 @@ app.post('/api/facturacion/solicitar', async (req, res) => {
             ]
         };
 
-        const createRes = await facturamaRequest('POST', '/4/cfdis', cfdi);
+        const createRes = await facturamaRequest('POST', '/api/cfdis', cfdi);
         if (createRes.status !== 201 && createRes.status !== 200) {
             console.error('[facturacion] Facturama error:', JSON.stringify(createRes.body));
             const msg = createRes.body?.Message
