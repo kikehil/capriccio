@@ -295,12 +295,12 @@ export default function FacturacionPage() {
                       <select
                         value={form.forma_pago}
                         onChange={e => setForm(f => ({ ...f, forma_pago: e.target.value }))}
-                        className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-red-500 transition text-sm"
+                        className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 bg-white focus:outline-none focus:border-red-500 transition text-sm"
                         required
                       >
-                        <option value="">Selecciona</option>
+                        <option value="" style={{color:'#0f172a',background:'#fff'}}>Selecciona</option>
                         {FORMAS_PAGO.map(fp => (
-                          <option key={fp.value} value={fp.value}>{fp.label}</option>
+                          <option key={fp.value} value={fp.value} style={{color:'#0f172a',background:'#fff'}}>{fp.label}</option>
                         ))}
                       </select>
                     </div>
@@ -312,12 +312,12 @@ export default function FacturacionPage() {
                     <select
                       value={form.regimen_fiscal}
                       onChange={e => setForm(f => ({ ...f, regimen_fiscal: e.target.value }))}
-                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-red-500 transition text-sm"
+                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 bg-white focus:outline-none focus:border-red-500 transition text-sm"
                       required
                     >
-                      <option value="">Selecciona tu régimen</option>
+                      <option value="" style={{color:'#0f172a',background:'#fff'}}>Selecciona tu régimen</option>
                       {REGIMENES_FISCALES.map(r => (
-                        <option key={r.value} value={r.value}>{r.label}</option>
+                        <option key={r.value} value={r.value} style={{color:'#0f172a',background:'#fff'}}>{r.label}</option>
                       ))}
                     </select>
                   </div>
@@ -328,12 +328,12 @@ export default function FacturacionPage() {
                     <select
                       value={form.uso_cfdi}
                       onChange={e => setForm(f => ({ ...f, uso_cfdi: e.target.value }))}
-                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-red-500 transition text-sm"
+                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 bg-white focus:outline-none focus:border-red-500 transition text-sm"
                       required
                     >
-                      <option value="">Selecciona el uso</option>
+                      <option value="" style={{color:'#0f172a',background:'#fff'}}>Selecciona el uso</option>
                       {USOS_CFDI.map(u => (
-                        <option key={u.value} value={u.value}>{u.label}</option>
+                        <option key={u.value} value={u.value} style={{color:'#0f172a',background:'#fff'}}>{u.label}</option>
                       ))}
                     </select>
                   </div>

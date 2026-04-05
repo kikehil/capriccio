@@ -1922,11 +1922,11 @@ app.post('/api/facturacion/solicitar', async (req, res) => {
         const subtotal = +(total / 1.16).toFixed(2);
         const iva = +(total - subtotal).toFixed(2);
 
+        // CFDI 3.3 — compatible con sandbox Facturama (pruebas/pruebas2011)
         const cfdi = {
-            "NameId": "1",
             "Folio": pedido.order_id,
-            "Date": new Date().toISOString().slice(0, 19),
             "Serie": "F",
+            "Date": new Date().toISOString().slice(0, 19),
             "PaymentForm": forma_pago,
             "PaymentMethod": "PUE",
             "Currency": "MXN",
@@ -1940,9 +1940,7 @@ app.post('/api/facturacion/solicitar', async (req, res) => {
             "Receiver": {
                 "Rfc": rfc.trim().toUpperCase(),
                 "Name": nombre.trim().toUpperCase(),
-                "CfdiUse": uso_cfdi,
-                "FiscalRegime": regimen_fiscal,
-                "TaxZipCode": cp_fiscal.trim()
+                "CfdiUse": uso_cfdi
             },
             "Items": [
                 {
@@ -1954,7 +1952,6 @@ app.post('/api/facturacion/solicitar', async (req, res) => {
                     "UnitPrice": subtotal,
                     "Quantity": 1,
                     "Subtotal": subtotal,
-                    "TaxObject": "02",
                     "Taxes": [
                         {
                             "Total": iva,
@@ -1985,7 +1982,7 @@ app.post('/api/facturacion/solicitar', async (req, res) => {
         // Descargar PDF en base64
         let pdfBase64 = null;
         try {
-            const pdfRes = await facturamaRequest('GET', `/api-lite/cfdis/issued/pdf/${cfdiId}`);
+            const pdfRes = await facturamaRequest('GET', `/api/cfdis/issued/pdf/${cfdiId}`);
             if (pdfRes.status === 200 && pdfRes.body?.Content) pdfBase64 = pdfRes.body.Content;
         } catch (pdfErr) {
             console.warn('[facturacion] PDF download warning:', pdfErr.message);
