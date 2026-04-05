@@ -983,6 +983,9 @@ io.on('connection', (socket) => {
     if (!colNames.includes('calificacion')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN calificacion INTEGER DEFAULT 0");
     if (!colNames.includes('calificacion_comentario')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN calificacion_comentario TEXT");
     if (!colNames.includes('metodo_entrega')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN metodo_entrega TEXT DEFAULT 'domicilio'");
+    if (!colNames.includes('facturado')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN facturado INTEGER DEFAULT 0");
+    if (!colNames.includes('factura_uuid')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN factura_uuid TEXT");
+    if (!colNames.includes('facturado_at')) await dbConn2.run("ALTER TABLE pedidos ADD COLUMN facturado_at TEXT");
     console.log('✅ Columnas tracking listas');
 })();
 
@@ -1820,6 +1823,185 @@ app.patch('/api/caja/cobrar-pedido/:order_id', authorize(['admin', 'caja', 'resp
     } catch (e) {
         console.error('Error cobrar-pedido:', e);
         res.status(500).json({ error: 'Error al cobrar pedido' });
+    }
+});
+
+// ============================================================
+// ─── FACTURACIÓN EN LÍNEA ────────────────────────────────────────────────────
+
+function facturamaRequest(method, path, body = null) {
+    const baseUrl = process.env.FACTURAMA_URL || 'https://apisandbox.facturama.mx';
+    const user = process.env.FACTURAMA_USER || 'pruebas';
+    const pass = process.env.FACTURAMA_PASS || 'pruebas2011';
+    const auth = Buffer.from(`${user}:${pass}`).toString('base64');
+
+    return new Promise((resolve, reject) => {
+        const parsed = new URL(baseUrl + path);
+        const isHttps = parsed.protocol === 'https:';
+        const lib = isHttps ? require('https') : require('http');
+        const payload = body ? JSON.stringify(body) : null;
+        const headers = { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' };
+        if (payload) headers['Content-Length'] = Buffer.byteLength(payload);
+
+        const req = lib.request({
+            hostname: parsed.hostname,
+            port: parsed.port || (isHttps ? 443 : 80),
+            path: parsed.pathname + parsed.search,
+            method,
+            headers
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+                catch { resolve({ status: res.statusCode, body: data }); }
+            });
+        });
+        req.on('error', reject);
+        if (payload) req.write(payload);
+        req.end();
+    });
+}
+
+// GET /api/facturacion/pedido/:order_id — buscar pedido (público)
+app.get('/api/facturacion/pedido/:order_id', async (req, res) => {
+    try {
+        const { order_id } = req.params;
+        const result = await db.query(
+            'SELECT order_id, total, created_at, metodo_entrega, status, facturado FROM pedidos WHERE order_id = $1',
+            [order_id.toUpperCase()]
+        );
+        if (!result.rows.length) return res.status(404).json({ error: 'Pedido no encontrado' });
+        const p = result.rows[0];
+
+        if (p.status === 'cancelado') return res.status(400).json({ error: 'Este pedido fue cancelado y no puede facturarse' });
+        if (p.facturado) return res.status(400).json({ error: 'Este pedido ya fue facturado. Revisa tu correo electrónico.' });
+
+        const pedidoDate = new Date(p.created_at);
+        const now = new Date();
+        if (pedidoDate.getMonth() !== now.getMonth() || pedidoDate.getFullYear() !== now.getFullYear()) {
+            return res.status(400).json({ error: 'Solo se puede facturar pedidos del mes en curso' });
+        }
+
+        res.json({ order_id: p.order_id, total: p.total, created_at: p.created_at, metodo_entrega: p.metodo_entrega });
+    } catch (e) {
+        console.error('[facturacion GET]', e);
+        res.status(500).json({ error: 'Error al buscar pedido' });
+    }
+});
+
+// POST /api/facturacion/solicitar — generar CFDI (público)
+app.post('/api/facturacion/solicitar', async (req, res) => {
+    try {
+        const { order_id, rfc, nombre, cp_fiscal, regimen_fiscal, uso_cfdi, forma_pago, email } = req.body;
+
+        if (!order_id || !rfc || !nombre || !cp_fiscal || !regimen_fiscal || !uso_cfdi || !forma_pago || !email) {
+            return res.status(400).json({ error: 'Todos los campos son requeridos' });
+        }
+        if (!/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/i.test(rfc.trim())) {
+            return res.status(400).json({ error: 'RFC inválido' });
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ error: 'Email inválido' });
+        }
+
+        const result = await db.query('SELECT * FROM pedidos WHERE order_id = $1', [order_id.toUpperCase()]);
+        if (!result.rows.length) return res.status(404).json({ error: 'Pedido no encontrado' });
+        const pedido = result.rows[0];
+
+        if (pedido.facturado) return res.status(400).json({ error: 'Este pedido ya fue facturado' });
+        if (pedido.status === 'cancelado') return res.status(400).json({ error: 'Pedido cancelado' });
+
+        const pedidoDate = new Date(pedido.created_at);
+        const now = new Date();
+        if (pedidoDate.getMonth() !== now.getMonth() || pedidoDate.getFullYear() !== now.getFullYear()) {
+            return res.status(400).json({ error: 'Solo se puede facturar pedidos del mes en curso' });
+        }
+
+        const total = parseFloat(pedido.total);
+        const subtotal = +(total / 1.16).toFixed(2);
+        const iva = +(total - subtotal).toFixed(2);
+
+        const cfdi = {
+            "NameId": "1",
+            "Folio": pedido.order_id,
+            "Date": new Date().toISOString().slice(0, 19),
+            "Serie": "F",
+            "PaymentForm": forma_pago,
+            "PaymentMethod": "PUE",
+            "Currency": "MXN",
+            "ExpeditionPlace": process.env.FACTURAMA_CP_EMISOR || "93990",
+            "CfdiType": "I",
+            "Issuer": {
+                "FiscalRegime": process.env.FACTURAMA_REGIMEN_EMISOR || "621",
+                "Rfc": process.env.FACTURAMA_RFC_EMISOR || "EKU9003173C9",
+                "Name": process.env.FACTURAMA_NOMBRE_EMISOR || "Capriccio Pizzeria SA de CV"
+            },
+            "Receiver": {
+                "Rfc": rfc.trim().toUpperCase(),
+                "Name": nombre.trim().toUpperCase(),
+                "CfdiUse": uso_cfdi,
+                "FiscalRegime": regimen_fiscal,
+                "TaxZipCode": cp_fiscal.trim()
+            },
+            "Items": [
+                {
+                    "ProductCode": "90101501",
+                    "IdentificationNumber": pedido.order_id,
+                    "Description": `Servicio de restaurante - Pedido ${pedido.order_id}`,
+                    "Unit": "Servicio",
+                    "UnitCode": "E48",
+                    "UnitPrice": subtotal,
+                    "Quantity": 1,
+                    "Subtotal": subtotal,
+                    "TaxObject": "02",
+                    "Taxes": [
+                        {
+                            "Total": iva,
+                            "Name": "IVA",
+                            "Base": subtotal,
+                            "Rate": 0.16,
+                            "IsRetention": false
+                        }
+                    ],
+                    "Total": total
+                }
+            ]
+        };
+
+        const createRes = await facturamaRequest('POST', '/4/cfdis', cfdi);
+        if (createRes.status !== 201 && createRes.status !== 200) {
+            console.error('[facturacion] Facturama error:', JSON.stringify(createRes.body));
+            const msg = createRes.body?.Message
+                || (createRes.body?.ModelState ? Object.values(createRes.body.ModelState).flat().join(' ') : null)
+                || 'Error al timbrar CFDI';
+            return res.status(500).json({ error: msg });
+        }
+
+        const cfdiData = createRes.body;
+        const cfdiId = cfdiData.Id;
+        const uuid = cfdiData.Complement?.TaxStamp?.Uuid || cfdiData.Id;
+
+        // Descargar PDF en base64
+        let pdfBase64 = null;
+        try {
+            const pdfRes = await facturamaRequest('GET', `/api-lite/cfdis/issued/pdf/${cfdiId}`);
+            if (pdfRes.status === 200 && pdfRes.body?.Content) pdfBase64 = pdfRes.body.Content;
+        } catch (pdfErr) {
+            console.warn('[facturacion] PDF download warning:', pdfErr.message);
+        }
+
+        // Marcar pedido como facturado
+        await db.query(
+            `UPDATE pedidos SET facturado = 1, factura_uuid = $1, facturado_at = datetime('now','localtime') WHERE order_id = $2`,
+            [uuid, pedido.order_id]
+        );
+
+        res.json({ ok: true, uuid, cfdi_id: cfdiId, pdf_base64: pdfBase64 });
+
+    } catch (e) {
+        console.error('[facturacion] Error:', e);
+        res.status(500).json({ error: 'Error al generar factura: ' + e.message });
     }
 });
 
