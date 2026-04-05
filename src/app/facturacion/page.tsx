@@ -197,7 +197,7 @@ export default function FacturacionPage() {
                       value={orderId}
                       onChange={e => setOrderId(e.target.value.toUpperCase())}
                       placeholder="Ej: ABC123"
-                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 font-mono text-lg text-center tracking-widest focus:outline-none focus:border-red-500 transition"
+                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 font-mono text-lg text-center tracking-widest text-slate-900 bg-white text-slate-900 bg-white focus:outline-none focus:border-red-500 transition"
                       required
                     />
                   </div>
@@ -257,7 +257,7 @@ export default function FacturacionPage() {
                       onChange={e => setForm(f => ({ ...f, rfc: e.target.value.toUpperCase() }))}
                       placeholder="XAXX010101000"
                       maxLength={13}
-                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 font-mono uppercase focus:outline-none focus:border-red-500 transition"
+                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 font-mono uppercase text-slate-900 bg-white focus:outline-none focus:border-red-500 transition"
                       required
                     />
                     <p className="text-xs text-slate-400 mt-1">Usa XAXX010101000 para público en general</p>
@@ -271,7 +271,7 @@ export default function FacturacionPage() {
                       value={form.nombre}
                       onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
                       placeholder="Como aparece en tu constancia fiscal"
-                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-red-500 transition"
+                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 bg-white focus:outline-none focus:border-red-500 transition"
                       required
                     />
                   </div>
@@ -286,7 +286,7 @@ export default function FacturacionPage() {
                         onChange={e => setForm(f => ({ ...f, cp_fiscal: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
                         placeholder="64000"
                         maxLength={5}
-                        className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 font-mono focus:outline-none focus:border-red-500 transition"
+                        className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 font-mono text-slate-900 bg-white focus:outline-none focus:border-red-500 transition"
                         required
                       />
                     </div>
@@ -346,7 +346,7 @@ export default function FacturacionPage() {
                       value={form.email}
                       onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                       placeholder="tu@correo.com"
-                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-red-500 transition"
+                      className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 bg-white focus:outline-none focus:border-red-500 transition"
                       required
                     />
                     <p className="text-xs text-slate-400 mt-1">Para descargar tu factura desde esta pantalla</p>

@@ -1868,8 +1868,8 @@ app.get('/api/facturacion/pedido/:order_id', async (req, res) => {
     try {
         const { order_id } = req.params;
         const result = await db.query(
-            'SELECT order_id, total, created_at, metodo_entrega, status, facturado FROM pedidos WHERE order_id = $1',
-            [order_id.toUpperCase()]
+            'SELECT order_id, total, created_at, metodo_entrega, status, facturado FROM pedidos WHERE LOWER(order_id) = LOWER($1)',
+            [order_id]
         );
         if (!result.rows.length) return res.status(404).json({ error: 'Pedido no encontrado' });
         const p = result.rows[0];
@@ -1905,7 +1905,7 @@ app.post('/api/facturacion/solicitar', async (req, res) => {
             return res.status(400).json({ error: 'Email inválido' });
         }
 
-        const result = await db.query('SELECT * FROM pedidos WHERE order_id = $1', [order_id.toUpperCase()]);
+        const result = await db.query('SELECT * FROM pedidos WHERE LOWER(order_id) = LOWER($1)', [order_id]);
         if (!result.rows.length) return res.status(404).json({ error: 'Pedido no encontrado' });
         const pedido = result.rows[0];
 
